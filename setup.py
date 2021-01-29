@@ -8,7 +8,7 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 setuptools.setup(
      name='easy-auth',  
-     version='0.101',
+     version='NEXTVERSION',
      packages=setuptools.find_packages(include=['easyauth'], exclude=['build']),
      author="Joshua Jamison",
      author_email="joshjamison1@gmail.com",
