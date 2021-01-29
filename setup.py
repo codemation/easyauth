@@ -1,6 +1,6 @@
 import setuptools
 
-BASE_REQUIREMENTS = ['makefun==1.9.5', 'PyJWT==2.0.0', 'python-jwt==3.3.0', 'fastapi', 'uvicorn']
+BASE_REQUIREMENTS = ['makefun==1.9.5', 'PyJWT==2.0.0', 'python-jwt==3.3.0', 'fastapi', 'uvicorn', 'python-multipart==0.0.5']
 SERVER_REQUIREMENTS = ['aiopyql==0.350', 'cryptography']
 CLIENT_REQUIREMENTS = []
 
