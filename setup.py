@@ -1,13 +1,14 @@
 import setuptools
 
-BASE_REQUIREMENTS = ['makefun==1.9.5', 'PyJWT==2.0.0', 'python-jwt==3.3.0', 'fastapi', 'uvicorn', 'cryptography', 'aiopyql==0.350']
-CLIENT_REQUIREMENTS = ['makefun==1.9.5', 'PyJWT==2.0.0', 'python-jwt==3.3.0']
+BASE_REQUIREMENTS = ['makefun==1.9.5', 'PyJWT==2.0.0', 'python-jwt==3.3.0', 'fastapi', 'uvicorn']
+SERVER_REQUIREMENTS = ['aiopyql==0.350', 'cryptography']
+CLIENT_REQUIREMENTS = []
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
 setuptools.setup(
      name='easy-auth',  
-     version='NEXTVERSION',
+     version='0.101',
      packages=setuptools.find_packages(include=['easyauth'], exclude=['build']),
      author="Joshua Jamison",
      author_email="joshjamison1@gmail.com",
@@ -23,8 +24,8 @@ setuptools.setup(
      python_requires='>=3.7, <4',   
      install_requires=BASE_REQUIREMENTS,
      extras_require={
-         'all': BASE_REQUIREMENTS,
-         'server': BASE_REQUIREMENTS,
+         'all': SERVER_REQUIREMENTS,
+         'server': SERVER_REQUIREMENTS,
          'client': CLIENT_REQUIREMENTS
      }
  )
