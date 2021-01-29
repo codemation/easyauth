@@ -2,7 +2,7 @@ from pydantic import BaseModel
 from fastapi import HTTPException, Depends
 from fastapi.security import OAuth2PasswordRequestForm
 
-from easyauthnz.models import User, Group, Role, Permission
+from easyauth.models import User, Group, Role, Permission
 
 
 async def api_setup(server):

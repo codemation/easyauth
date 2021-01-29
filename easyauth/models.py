@@ -47,7 +47,7 @@ async def tables_setup(server):
             password=server.encode_password(random_password),
             groups={'groups': ['administrators']}
         )
-        server.log.error(f"detected new EasyAuthNZ server, created admin user with password: {random_password}")
+        server.log.error(f"detected new EasyAuth server, created admin user with password: {random_password}")
 
     # Groups 
 
