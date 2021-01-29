@@ -9,11 +9,11 @@ Create a centralized Authentication and Authorization token server. Easily secur
 $ virtualenv -p <python3.X> easy-auth-env
 $ source easy-auth-env/bin/activate
 
-(easy-auth) $ pip install easyauth[all]
+(easy-auth) $ pip install easy-auth[all]
 
-(easy-auth) $ pip install easyauth[server] 
+(easy-auth) $ pip install easy-auth[server] 
 
-(easy-auth) $ pip install easyauth[client] # without db 
+(easy-auth) $ pip install easy-auth[client] # without db 
 
 ```
 #  Basic Server
