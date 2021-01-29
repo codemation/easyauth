@@ -45,7 +45,7 @@ async def database_setup(server):
         db = await data.Database.create(
             database=DB_NAME,
             cache_enabled=True,
-            debug=True
+            #debug=True
         )
     
     server.db = db
