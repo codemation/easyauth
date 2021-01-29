@@ -1,6 +1,6 @@
 import os
 from aiopyql import data
-from easyauthnz.models import tables_setup
+from easyauth.models import tables_setup
 
 async def database_setup(server):
     """

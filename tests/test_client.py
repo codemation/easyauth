@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from typing import Optional
 
-from easyauthnz.client import EasyAuthClient
+from easyauth.client import EasyAuthClient
 
 server = FastAPI(openapi_url="/groups/openapi.json")
 

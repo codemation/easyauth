@@ -12,9 +12,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from makefun import wraps
 from inspect import signature, Parameter
 
-from easyauthnz.db import database_setup
-from easyauthnz.models import tables_setup
-from easyauthnz.api import api_setup
+from easyauth.db import database_setup
+from easyauth.models import tables_setup
+from easyauth.api import api_setup
 
 
 class EasyAuthServer:

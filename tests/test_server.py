@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from easyauthnz.server import EasyAuthServer
+from easyauth.server import EasyAuthServer
 
 server = FastAPI()
 

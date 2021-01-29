@@ -38,7 +38,7 @@ EOF
 #test_server.py
 from fastapi import FastAPI
 
-from EasyAuth.server import EasyAuthServer
+from easyauth.server import EasyAuthServer
 
 server = FastAPI()
 
@@ -118,7 +118,7 @@ EOF
 #test_client.py
 from fastapi import FastAPI
 
-from EasyAuth.client import EasyAuthClient
+from easyauth.client import EasyAuthClient
 
 server = FastAPI()
 
