@@ -1,0 +1,7 @@
+aiopyql
+python-jwt
+makefun==1.9.5
+fastapi
+uvicorn
+pyjwt
+python-multipart

@@ -1,0 +1,35 @@
+from fastapi import FastAPI
+from typing import Optional
+
+from easyauthnz.client import EasyAuthClient
+
+server = FastAPI(openapi_url="/groups/openapi.json")
+
+@server.on_event('startup')
+async def startup():
+    server.auth = await EasyAuthClient.create(
+        server, 
+        'http://0.0.0.0:8332/auth/token', # Should be a running EasyAuthServer 
+        env_from_file='client_env.json'
+    )
+
+    # grants access to only specified users
+    @server.auth.get('/', users=['jane'])
+    async def root():
+        return f"I am root"
+    
+    # grants access to members of 'users' or 'admins' group.
+    @server.auth.get('/groups', groups=['users', 'admins'])
+    async def groups():
+        return f"I am groups"
+    
+    # grants access to all members of group which a role of 'basic' or advanced, or member 'users' group
+    @server.auth.get('/roles', roles=['basic', 'advanced'], groups=['users'])
+    async def roles():
+        return f"I am roles"
+
+    # grants access to all members of groups with a roles granting 'BASIC_CREATE'
+    # accesssing the auth token 
+    @server.auth.get('/actions', actions=['BASIC_CREATE'], groups=['administrators'], send_token=True)
+    async def action(access_token: Optional[str] = None):
+        return f"I am actions with token {access_token}"
