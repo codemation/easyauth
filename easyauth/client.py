@@ -252,3 +252,42 @@ class EasyAuthClient:
     ):
         permissions = self.parse_permissions(users, groups, roles, actions)
         return self.router(path, 'put', permissions=permissions, send_token=send_token, *args, **kwargs)
+    def patch(
+        self, 
+        path, 
+        users: list = None, 
+        groups: list= None, 
+        roles: list = None, 
+        actions: list = None, 
+        send_token: bool = False,
+        *args, 
+        **kwargs
+    ):      
+        permissions = self.parse_permissions(users, groups, roles, actions)
+        return self.router(path, 'patch', permissions=permissions, send_token=send_token, *args, **kwargs)
+    def options(
+        self, 
+        path, 
+        users: list = None, 
+        groups: list= None, 
+        roles: list = None, 
+        actions: list = None, 
+        send_token: bool = False,
+        *args, 
+        **kwargs
+    ):      
+        permissions = self.parse_permissions(users, groups, roles, actions)
+        return self.router(path, 'options', permissions=permissions, send_token=send_token, *args, **kwargs)
+    def head(
+        self, 
+        path, 
+        users: list = None, 
+        groups: list= None, 
+        roles: list = None, 
+        actions: list = None, 
+        send_token: bool = False,
+        *args, 
+        **kwargs
+    ):      
+        permissions = self.parse_permissions(users, groups, roles, actions)
+        return self.router(path, 'head', permissions=permissions, send_token=send_token, *args, **kwargs)
