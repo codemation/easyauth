@@ -1,4 +1,4 @@
-aiopyql
+aiopyql>=0.351
 python-jwt
 makefun==1.9.5
 fastapi
