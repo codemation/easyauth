@@ -16,6 +16,25 @@ async def api_setup(server):
     roles_tb = server.db.tables['roles']
     permissions_tb = server.db.tables['permissions']
 
+    @server.get('/auth/serviceaccount/token/{service}', response_model=Token, tags=['Token'])
+    async def get_service_account_token(service: str):
+        service_user = await users_tb[service]
+        if service_user is None:
+            raise HTTPException(status_code=404, detail=f"no service user with name {service} exists")
+
+        if not service_user['account_type'] == 'service':
+            raise HTTPException(status_code=400, detail=f"user {service} is not a service type account")
+        print(service_user)
+        permissions = await server.get_user_permissions(service_user)
+
+        token = server.issue_token(permissions, days=999)
+
+        server.log.warning(f"token generated: {type(token)}")
+        return {
+            "access_token": token, 
+            "token_type": "bearer"
+        }
+
     @server.server.post('/auth/token', response_model=Token, tags=['Token'])
     async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
         server.log.debug(f"login_for_access_token: form_data {form_data}")
@@ -26,7 +45,7 @@ async def api_setup(server):
                 detail="unable to authenticate with provided credentials"
             )
         # get user permissions
-        permissions = await server.get_user_permissions(user)
+        permissions = await server.get_user_permissions(user[0])
 
         # generate RSA token
         token = server.issue_token(permissions)

@@ -1,10 +1,12 @@
 from pydantic import BaseModel
+from typing import Optional
 
 class User(BaseModel):
-    username: str = ''
-    password: str = 'abcd1234'
-    full_name: str = 'first last'
-    email: str = 'name@domain.com'
+    username: str = None
+    password: Optional[str] = None
+    full_name: Optional[str] = None
+    account_type: str = 'user|service'
+    email: str = None
     groups: dict = {'groups': ['administrators']}
 
 class Group(BaseModel):
@@ -30,6 +32,7 @@ async def tables_setup(server):
                 ('username', str, 'UNIQUE NOT NULL'),
                 ('full_name', str), 
                 ('email', str),
+                ('account_type', str), # user / service 
                 ('password', str),
                 ('groups', str),
             ],

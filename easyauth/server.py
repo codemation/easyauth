@@ -128,7 +128,7 @@ class EasyAuthServer:
             allow_methods=["*"],
             allow_headers=["*"],
         )
-    def issue_token(self, permissions):
+    def issue_token(self, permissions, minutes=60, hours=0, days=0):
 
         payload = {
             'iss': os.environ['ISSUER'], 
@@ -142,7 +142,7 @@ class EasyAuthServer:
                 payload, 
                 jwk.JWK.from_json(private_key), 
                 'RS256', 
-                datetime.timedelta(minutes=50)
+                datetime.timedelta(minutes=minutes, hours=hours, days=days)
             )
     def decode_token(self, token):
         with open(f"{os.environ['KEY_PATH']}/{os.environ['KEY_NAME']}.pub", 'r') as pb_key:
@@ -168,6 +168,8 @@ class EasyAuthServer:
     async def validate_user_pw(self, username, password):
         user = await self.db.tables['users'].select('*', where={'username': username})
         if len(user) > 0:
+            if user[0]['account_type'] == 'service':
+                raise HTTPException(status_code=401, detail=f"unable to login with service accounts")
             self.log.warning(f"checking auth for {user}")
             try:
                 decoded = self.decode_password(user[0]['password'], password)
@@ -183,7 +185,7 @@ class EasyAuthServer:
         groups_table = self.db.tables['groups']
         roles_table = self.db.tables['roles']
         permissions = {}
-        groups = user[0]['groups']['groups']
+        groups = user['groups']['groups']
         for group in groups:
             group_info = await groups_table[group]
             if not group_info:
@@ -202,7 +204,7 @@ class EasyAuthServer:
             if not 'groups' in permissions:
                 permissions['groups'] = []
             permissions['groups'].append(group)
-        permissions['users'] = [user[0]['username']]
+        permissions['users'] = [user['username']]
         return permissions
 
     def router(self, path, method, permissions: list, send_token: bool, *args, **kwargs):
