@@ -24,21 +24,55 @@ class Permission(BaseModel):
 
 async def tables_setup(server):
     db = server.db
-
-    if not 'users' in db.tables:
-        await db.create_table(
+    new_user = not 'users' in db.tables
+    await db.create_table(
         'users', 
+        [
+            ('username', str, 'UNIQUE NOT NULL'),
+            ('full_name', str), 
+            ('email', str),
+            ('account_type', str), # user / service 
+            ('password', str),
+            ('groups', str),
+        ],
+        'username',
+        cache_enabled=True
+    )
+
+    # Groups 
+
+    await db.create_table(
+        'groups', 
             [
-                ('username', str, 'UNIQUE NOT NULL'),
-                ('full_name', str), 
-                ('email', str),
-                ('account_type', str), # user / service 
-                ('password', str),
-                ('groups', str),
+            ('group_name', str, 'UNIQUE NOT NULL'), 
+            ('roles', str), 
             ],
-            'username',
+            'group_name',
             cache_enabled=True
         )
+
+    await db.create_table(
+        'roles', 
+        [
+            ('role', str, 'UNIQUE NOT NULL'), 
+            ('permissions', str)
+        ],
+        'role',
+        cache_enabled=True
+    )
+
+    await db.create_table(
+        'permissions', 
+            [
+                ('action', str, 'NOT NULL'),
+                ('details', str)
+            ],
+            'action',
+            cache_enabled=True
+    )
+
+
+    if new_user:
         import random, string
         def get_random_string(length):
             letters = string.ascii_lowercase
@@ -52,47 +86,13 @@ async def tables_setup(server):
         )
         server.log.error(f"detected new EasyAuth server, created admin user with password: {random_password}")
 
-    # Groups 
-
-    if not 'groups' in db.tables:
-        await db.create_table(
-        'groups', 
-            [
-            ('group_name', str, 'UNIQUE NOT NULL'), 
-            ('roles', str), 
-            ],
-            'group_name',
-            cache_enabled=True
-        )
         await db.tables['groups'].insert(
             group_name='administrators',
             roles={'roles': ['admin']}
         )
-
-    if not 'roles' in db.tables:
-        await db.create_table(
-        'roles', 
-            [
-            ('role', str, 'UNIQUE NOT NULL'), 
-            ('permissions', str)
-            ],
-            'role',
-            cache_enabled=True
-        )
         await db.tables['roles'].insert(
             role='admin',
             permissions={'actions': ['CREATE_USER']}
-        )
-
-    if not 'permissions' in db.tables:
-        await db.create_table(
-            'permissions', 
-                [
-                    ('action', str, 'NOT NULL'),
-                    ('details', str)
-                ],
-                'action',
-                cache_enabled=True
         )
         await db.tables['permissions'].insert(
             action='CREATE_USER',
