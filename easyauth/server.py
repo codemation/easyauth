@@ -225,9 +225,8 @@ class EasyAuthServer:
             @wraps(func, new_sig=new_sig)
             async def mock_function(token: str = Depends(self.oauth2_scheme), *args, **kwargs):
                 try:
-                    print(token)
                     token = self.decode_token(token)[1]
-                    print(f"decoded token: {token}")
+                    self.log.debug(f"decoded token: {token}")
                     allowed = False
                     for auth_type, values in permissions.items():
                         if not auth_type in token['permissions']:

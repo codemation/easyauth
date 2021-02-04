@@ -101,7 +101,6 @@ class EasyAuthClient:
                     annotation=str
                 )
 
-            print(params)
             args_index = [str(p) for p in params]
             kwarg_index = None
             for i, v in enumerate(args_index):
@@ -115,13 +114,9 @@ class EasyAuthClient:
             if arg_index:
                 params.insert(arg_index-1, token_parameter)
             elif not kwarg_index is None and arg_index is None:
-                print(f"kwargs only")
                 params.insert(kwarg_index, token_parameter)
             else:
                 params.append(token_parameter)
-            print(f"kwarg_index: {kwarg_index} argindex: {arg_index}")
-            print(params)
-            
                     
             """
             params.append(
@@ -138,9 +133,8 @@ class EasyAuthClient:
             @wraps(func, new_sig=new_sig)
             async def mock_function(token: str = Depends(self.oauth2_scheme), *args, **kwargs):
                 try:
-                    print(token)
                     token = self.decode_token(token)[1]
-                    print(f"decoded token: {token}")
+                    self.log.debug(f"decoded token: {token}")
                 except Exception:
                     self.log.exception(f"error decoding token")
                     raise HTTPException(status_code=401, detail=f"not authorized, invalid or expired")
