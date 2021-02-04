@@ -24,7 +24,6 @@ async def api_setup(server):
 
         if not service_user['account_type'] == 'service':
             raise HTTPException(status_code=400, detail=f"user {service} is not a service type account")
-        print(service_user)
         permissions = await server.get_user_permissions(service_user)
 
         token = server.issue_token(permissions, days=999)
@@ -120,7 +119,7 @@ async def api_setup(server):
             raise HTTPException(status_code=400, detail=f"{group['group_name']} already exists")
 
         for role in group['roles']['roles']:
-            if await groups_tb[role] is None:
+            if await roles_tb[role] is None:
                 # raise group does not exist
                 raise HTTPException(status_code=400, detail=f"no role with name {role} exists, create first")
 
@@ -170,8 +169,6 @@ async def api_setup(server):
             raise HTTPException(status_code=400, detail=f"{role['role']} already exists")
         
         for permission in role['permissions']['actions']:
-            exists = await permissions_tb[permission]
-            print(exists)
             if await permissions_tb[permission] is None:
                 # raise group does not exist
                 raise HTTPException(status_code=400, detail=f"no permission with name {permission} exists, create first")
@@ -216,7 +213,6 @@ async def api_setup(server):
     @server.put('/auth/permissions', status_code=201, tags=['Actions'])
     async def create_permission(permission: Permission):
         permission = dict(permission)
-        print(permission)
         if not await permissions_tb[permission['action']] is None:
             raise HTTPException(status_code=400, detail=f"{permission['action']} already exists")
 
@@ -226,7 +222,6 @@ async def api_setup(server):
     @server.post('/auth/permissions', status_code=201, tags=['Actions'])
     async def create_or_update_permission(permission: Permission):
         permission = dict(permission)
-        print(permission)
         if not await permissions_tb[permission['action']] is None:
             await permissions_tb.update(
                 where={'action': permission.pop('action')},
