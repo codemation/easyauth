@@ -79,7 +79,7 @@ async def api_setup(server):
         full_name: Optional[str]
         password: Optional[str]
         email: Optional[str]
-        groups: Optional[dict]
+        groups: Optional[list]
 
     @server.post('/auth/user/{username}', tags=['Users'])
     async def update_user(
