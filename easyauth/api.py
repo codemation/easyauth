@@ -1,3 +1,4 @@
+from typing import Optional
 from pydantic import BaseModel
 from fastapi import HTTPException, Depends
 from fastapi.security import OAuth2PasswordRequestForm
@@ -73,22 +74,35 @@ async def api_setup(server):
 
         return f"{user['username']} created"
 
-    @server.post('/auth/users', status_code=201, tags=['Users'])
-    async def create_or_update_user(user: User):
-        user = dict(user)
-        if "password" in user:
+
+    class UserUpdate(BaseModel):
+        full_name: Optional[str]
+        password: Optional[str]
+        email: Optional[str]
+        groups: Optional[dict]
+
+    @server.post('/auth/user/{username}', tags=['Users'])
+    async def update_user(
+        username: str,
+        update: UserUpdate
+    ):
+
+        update = {k: v for k, v in dict(update).items() if not v is None}
+
+        if "password" in update:
             # encode password before storing
-            user['password'] = server.encode_password(user['password']) 
-        if not await users_tb[user['username']] is None:
+            update['password'] = server.encode_password(update['password'])
 
+        if not await users_tb[username] is None:
             await users_tb.update(
-                where={'username': user.pop('username')},
-                **user
+                where={'username': username},
+                **update
             )
-            return f"existing user updated"    
-
-        await users_tb.insert(**user)
-        return f"user {role['username']} created"
+            return f"{username} updated"
+        raise HTTPException(
+            status_code=404,
+            detail=f"no user with name {username} exists"
+        )
 
     @server.delete('/auth/user', tags=['Users'])
     async def delete_user(username: str):
@@ -101,13 +115,12 @@ async def api_setup(server):
     async def get_all_users():
         return await users_tb.select('*')
 
-    @server.get('/auth/users/{user}', tags=['Users'])
+    @server.get('/auth/users/{username}', tags=['Users'])
     async def get_user(username: str):
         user = await users_tb[username]
         if user is None:
             raise HTTPException(status_code=404, detail=f"no user found with name {username}")
         return user
-
 
     # Groups
 

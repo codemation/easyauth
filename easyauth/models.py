@@ -7,7 +7,7 @@ class User(BaseModel):
     full_name: Optional[str] = None
     account_type: str = 'user|service'
     email: str = None
-    groups: dict = {'groups': ['administrators']}
+    groups: dict = {'groups': ['<group_name>']}
 
 class Group(BaseModel):
     group_name: str
@@ -82,6 +82,7 @@ async def tables_setup(server):
         await db.tables['users'].insert(
             username='admin',
             password=server.encode_password(random_password),
+            account_type='user',
             groups={'groups': ['administrators']}
         )
         server.log.error(f"detected new EasyAuth server, created admin user with password: {random_password}")
