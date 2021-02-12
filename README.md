@@ -106,7 +106,7 @@ INFO:     Uvicorn running on http://0.0.0.0:8330 (Press CTRL+C to quit)
 
 Configure require env variables via a .json
 ```Bash
-$ cat > server_env.json <<EOF
+$ cat > client_env.json <<EOF
 {
     "KEY_PATH": "/my_key-location",
     "KEY_NAME": "test_key"
