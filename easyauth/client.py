@@ -46,14 +46,16 @@ class EasyAuthClient:
         token_url: str,
         logger: logging.Logger = None,
         debug: bool = False,
-        env_from_file: str = None
+        env_from_file: str = None,
+        default_permissions: str = {'groups': ['administrators']}
     ):
         auth_server = cls(
             server,
             token_url,
             logger,
             debug,
-            env_from_file
+            env_from_file,
+            default_permissions
         )
 
         return auth_server

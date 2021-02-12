@@ -59,14 +59,16 @@ class EasyAuthServer:
         token_url: str,
         logger: logging.Logger = None,
         debug: bool = False,
-        env_from_file: str = None
+        env_from_file: str = None,
+        default_permission: dict = {'groups': ['administrators']}
     ):
         auth_server = cls(
             server,
             token_url,
             logger,
             debug,
-            env_from_file
+            env_from_file,
+            default_permission
         )
         await database_setup(auth_server)
         await tables_setup(auth_server)

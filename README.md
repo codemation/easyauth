@@ -127,8 +127,14 @@ async def startup():
     server.auth = await EasyAuthClient.create(
         server, 
         'http://0.0.0.0:8330/auth/token', # Should be a running EasyAuthServer 
-        env_from_file='client_env.json'
+        env_from_file='client_env.json',
+        default_permissoins={'groups': ['users']}
     )
+
+    # grants access to users matching default_permissions
+    @server.auth.get('/default')
+    async def default():
+        return f"I am default"
 
     # grants access to only specified users
     @server.auth.get('/', users=['jane'])
@@ -150,6 +156,9 @@ async def startup():
     async def action():
         return f"I am actions"
 ```
+<b>Note: default_permissoins is set to {'groups': ['administrators']} if unspecifeid.  </b>
+
+
 ![](images/client.png)
 ![](images/OAuth.png)
 
