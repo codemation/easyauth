@@ -241,7 +241,7 @@ class EasyAuthServer:
                     if not allowed:    
                         self.log.warning(f"{value} in {auth_type} is required")
                         raise HTTPException(
-                            status_code=401, 
+                            status_code=403, 
                             detail=f"not authorized, permissions required: {permissions}"
                         )
                 except Exception:

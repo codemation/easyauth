@@ -151,7 +151,7 @@ class EasyAuthClient:
                             break
                 if not allowed:    
                     raise HTTPException(
-                        status_code=401, 
+                        status_code=403, 
                         detail=f"not authorized, permissions required: {permissions}"
                     )
                 if send_token:
