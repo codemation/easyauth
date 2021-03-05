@@ -146,10 +146,11 @@ async def startup():
     async def groups():
         return f"I am groups"
     
-    # grants access to all members of group which a role of 'basic' or advanced, or member 'users' group
+    # grants access to all members of 'users' group 
+    # or a groups with role of 'basic' or advanced
     @server.auth.get('/roles', roles=['basic', 'advanced'], groups=['users'])
     async def roles():
-        return f"I am roles"
+        return f"Roles and Groups"
 
     # grants access to all members of groups with a roles granting 'BASIC_CREATE'
     @server.auth.get('/actions', actions=['BASIC_CREATE'])
@@ -158,6 +159,16 @@ async def startup():
 ```
 <b>Note: default_permissoins is set to {'groups': ['administrators']} if unspecifeid.  </b>
 
+## Permissions
+EasyAuth allows endpoints to be as exclusive or as inclusive as needed. Authorization is granted if user meets at least 1 condition. 
+```python
+@server.auth.get(
+    '/roles', 
+    roles=['basic'],  # OR
+    groups=['users'], # OR
+    actions=['CREATE_BASIC'] 
+)
+```
 
 ![](images/client.png)
 ![](images/OAuth.png)
