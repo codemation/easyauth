@@ -88,8 +88,8 @@ async def api_setup(server):
         await users_tb.insert(**user)
 
         # trigger some activation email later?
-
         return f"{user['username']} created"
+        
     @server.put('/auth/service', status_code=201, actions=['CREATE_USER'], tags=['Users'])
     async def create_service(service: Service):
         service = dict(service)
@@ -105,8 +105,6 @@ async def api_setup(server):
         # trigger some activation email later?
 
         return f"{service['username']} created"
-
-        
 
     class UserGroup(BaseModel):
         groups: list
