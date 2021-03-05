@@ -5,8 +5,10 @@ class User(BaseModel):
     username: str = None
     password: Optional[str] = None
     full_name: Optional[str] = None
-    account_type: str = 'user|service'
     email: str = None
+    groups: dict = {'groups': ['<group_name>']}
+class Service(BaseModel):
+    username: str = None
     groups: dict = {'groups': ['<group_name>']}
 
 class Group(BaseModel):
