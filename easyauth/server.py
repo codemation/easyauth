@@ -1,4 +1,5 @@
 import os
+import bcrypt
 import jwcrypto.jwk as jwk
 import python_jwt as jwt
 import jwt as pyjwt
@@ -163,10 +164,16 @@ class EasyAuthServer:
         return pyjwt.decode(token.encode('utf-8'), secret, algorithms='HS256')
 
     def encode_password(self, pw):
-        return self.encode(pw, password=pw)
+        hash_and_salt = bcrypt.hashpw(pw.encode(), bcrypt.gensalt())
+        return hash_and_salt.decode()
+    def is_password_valid(self, encoded, input_password):
+        has_and_salt = encoded.encode()
+        return bcrypt.checkpw(input_password.encode(), has_and_salt)
 
-    def decode_password(self, encodedPw, auth):
-        return self.decode(encodedPw, auth)
+
+    def decode_password(self, encoded, auth):
+        return self.decode(encoded, auth)
+
     async def validate_user_pw(self, username, password):
         user = await self.db.tables['users'].select('*', where={'username': username})
         if len(user) > 0:
@@ -174,7 +181,19 @@ class EasyAuthServer:
                 raise HTTPException(status_code=401, detail=f"unable to login with service accounts")
             self.log.warning(f"checking auth for {user}")
             try:
-                decoded = self.decode_password(user[0]['password'], password)
+                try:
+                    if self.is_password_valid(user[0]['password'], password):
+                        return user
+                except ValueError:
+                    pass
+
+                # try old auth
+                decoded_password = self.decode_password(user[0]['password'], password)
+                self.log.warning(f"old password used: {decoded_password} - updating")
+                await self.db.tables['users'].update(
+                    password=self.encode_password(decoded_password['password']),
+                    where={'username': username}
+                )
                 return user
             except Exception as e:
                 self.log.exception(f"Auth failed for user {user} - invalid credentials")
