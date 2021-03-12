@@ -189,7 +189,7 @@ class EasyAuthServer:
 
                 # try old auth
                 decoded_password = self.decode_password(user[0]['password'], password)
-                self.log.warning(f"old password used: {decoded_password} - updating")
+                self.log.warning(f"old password used: - updating")
                 await self.db.tables['users'].update(
                     password=self.encode_password(decoded_password['password']),
                     where={'username': username}
