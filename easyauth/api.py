@@ -187,7 +187,7 @@ async def api_setup(server):
         for role in roles['roles']:
             await verify_role(role)
         await groups_tb.update(
-            roles={'roles': roles},
+            roles={'roles': roles['roles']},
             where={'group_name': group}
         )
         return f"existing group updated"
@@ -234,7 +234,7 @@ async def api_setup(server):
             await verify_action(action)
 
         await roles_tb.update(
-            permissions={'actions': actions},
+            permissions={'actions': actions['actions']},
             where={'role': role.pop('role')}
         )
         return f"existing role updated"
