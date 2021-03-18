@@ -3,20 +3,24 @@
 #
 Create a centralized Authentication and Authorization token server. Easily secure FastAPI endpoints based on Users, Groups, Roles or Permissions with very little database usage.
 
-# Quick Start
+[![Documentation Status](https://readthedocs.org/projects/easyauth/badge/?version=latest)](https://easyauth.readthedocs.io/en/latest/?badge=latest) [![PyPI version](https://badge.fury.io/py/easy-auth.svg)](https://pypi.org/project/easy-auth/)
+
+<h2>Documentation</h1> 
+
+[https://easyauth.readthedocs.io/en/latest/](https://easyauth.readthedocs.io/en/latest/)
+
+## Quick Start
 ```bash
 
 $ virtualenv -p <python3.X> easy-auth-env
 $ source easy-auth-env/bin/activate
-
-(easy-auth) $ pip install easy-auth[all]
 
 (easy-auth) $ pip install easy-auth[server] 
 
 (easy-auth) $ pip install easy-auth[client] # without db 
 
 ```
-#  Basic Server
+##  Basic Server
 
 Configure require env variables via a .json
 ```Bash
@@ -32,7 +36,6 @@ $ cat > server_env.json <<EOF
 }
 EOF
 ```
-
 
 ```python
 #test_server.py
@@ -55,54 +58,8 @@ Start Sever
 ```bash
 $ uvicorn --host 0.0.0.0 --port 8330 test_server:server
 ```
-```python
-"""
-When a server is started for the first time, detected by table creation (database tables not existing yet), a new admin user / group / role / action is created automatically, search in logs for # the password:
-"""
-```
 
-```
-01-25 10:32 EasyAuthServer ERROR    detected new EasyAuth server, created admin user with password: ymbuvwop
-```
-
-## Keys
-When an EasyAuthServer starts, it checks the provided KEY_NAME  & KEY_PATH location for existing keys, if none exist they are created.
-<br>
-
-```bash
-$ ls test_key*
-test_key.key  test_key.pub
-```
-<br>
-
-### Important .key file must be kept safe!
-Do not store in the paths monitored by git to avoid accidental commit.
-<br>
-
-The .pub file should be copied to any separate apps which you want to use this EasyAuthServer.
-<br>
-
- If either key is, ever lost, they will be re-created on the EasyAuthServer in the KEY_PATH location upon restart. 
-
-<br>
-
-If a .key is re-created, the new .pub key must be copied to all EasyAuthClients
-<br>
-
-# API
-
-This new admin user is required to access the APIs pre-created at
-the listening server location:
-```bash
-01-25 10:32 uvicorn.error INFO     Application startup complete.
-INFO:     Uvicorn running on http://0.0.0.0:8330 (Press CTRL+C to quit)
-```
-### See 0.0.0.0:8330/docs
-<br>
-
-![](images/api.png)
-
-# Basic Client
+## Basic Client
 
 Configure require env variables via a .json
 ```Bash
@@ -157,53 +114,16 @@ async def startup():
     async def action():
         return f"I am actions"
 ```
-<b>Note: default_permissoins is set to {'groups': ['administrators']} if unspecifeid.  </b>
 
-## Permissions
-EasyAuth allows endpoints to be as exclusive or as inclusive as needed. Authorization is granted if user meets at least 1 condition. 
-```python
-@server.auth.get(
-    '/roles', 
-    roles=['basic'],  # OR
-    groups=['users'], # OR
-    actions=['CREATE_BASIC'] 
-)
-```
+
+## Server 
+<h3>See 0.0.0.0:8330/docs </h3>
+
+![](images/api.png)
+
+
+## Client
 
 ![](images/client.png)
+
 ![](images/OAuth.png)
-
-## Under the hood
-
-When providing a username & password, the EasyAuthServer returns a Bearer Token containing all the users permissions. 
-<br>
-
-If the permissions match the endpoints configured users / groups / roles / actions, the request is allowed. 
-
-
-## Database Usage
-The default 'batteries mostly included' implementation utilizes a sqlite database managed by aiopyql.
-<br><br>
-
-Supported Databases: <br>
-* sqlite
-* mysql
-* postgres
-
-```bash
-cat > server_env.json << EOF
-{
-    "DB_TYPE": "mysql",
-    "DB_NAME": "auth",
-    "DB_HOST": "0.0.0.0",
-    "DB_PORT": "3306",
-    "DB_USER": "mysqluser",
-    "DB_PASSWORD": "my-secret",
-    "ISSUER": "EasyAuth",
-    "SUBJECT": "EasyAuthAuth",
-    "AUDIENCE": "EasyAuthApis",
-    "KEY_PATH": "/home/josh/Documents/python/EasyAuth/EasyAuth",
-    "KEY_NAME": "test_key"
-}
-EOF
-```
