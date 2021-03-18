@@ -158,7 +158,7 @@ async def api_setup(server):
 
     @server.get('/auth/users/{username}', tags=['Users'])
     async def get_user(username: str):
-        await verify_user(user)
+        await verify_user(username)
         user = await users_tb[username]
         return user
 
