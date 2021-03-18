@@ -2,7 +2,3 @@ site_name: EasyAuth
 theme: readthedocs
 markdown_extensions:
   - admonition
-extra_css:
-  - css/custom.css
-  - css/theme.css
-  - css/theme_extra.css
