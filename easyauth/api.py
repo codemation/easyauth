@@ -52,6 +52,31 @@ async def api_setup(server):
             "access_token": token, 
             "token_type": "bearer"
         }
+    @server.server.post('/auth/token/refresh', response_model=Token, tags=['Token'])
+    async def refresh_access_token(token: str = Depends(server.oauth2_scheme)):
+        try:
+            token = server.decode_token(token)[1]
+            user_in_token = token['permissions']['users'][0]
+            user = await server.db.tables['users'].select('*', where={'username': user_in_token})
+            server.log.warning(f"refresh_access_token: called for user: {user[0]}")
+            # get user permissions
+            permissions = await server.get_user_permissions(user[0])
+
+            # generate RSA token
+            token = server.issue_token(permissions)
+            server.log.warning(f"token generated: {type(token)}")
+            return {
+                "access_token": token, 
+                "token_type": "bearer"
+            }
+
+            return token
+        except Exception:
+            server.log.exception(f"refresh_access_token error")
+            raise HTTPException(
+                status_code=401, 
+                detail="token is invalid or expired"
+            )
 
     @server.server.post('/auth/token', response_model=Token, tags=['Token'])
     async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
