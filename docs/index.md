@@ -76,7 +76,7 @@ async def startup():
 When an EasyAuthServer starts, it checks the provided KEY_NAME  & KEY_PATH location for existing keys, if none exist they are created.
 <br>
 
-```bash
+```bash 
 $ ls test_key*
 test_key.key  test_key.pub
 ```

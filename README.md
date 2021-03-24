@@ -119,7 +119,7 @@ async def startup():
 ## Server 
 <h3>See 0.0.0.0:8330/docs </h3>
 
-![](images/api.png)
+![](docs/images/api.png)
 
 
 ## Client
