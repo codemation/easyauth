@@ -29,6 +29,7 @@ class EasyAuthServer:
         default_permission: dict = {'groups': ['administrators']}
     ):
         self.server = server
+        self.server.title = 'EasyAuth'
         self.oauth2_scheme = OAuth2PasswordBearer(tokenUrl=token_url) # /token
         self.DEFAULT_PERMISSION = default_permission
 
