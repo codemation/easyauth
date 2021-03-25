@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel
 from fastapi import HTTPException, Depends
 from fastapi.security import OAuth2PasswordRequestForm
@@ -33,7 +33,85 @@ async def api_setup(server):
         if await permissions_tb[action] is None:
             # raise group does not exist
             raise HTTPException(status_code=400, detail=f"no action with name {action} exists, create first")
+    
+    async def update_resource(resource, update, key):
+        key_value = update.pop(key)
+        result = await server.db.tables[resource].update(
+            where={key: key_value},
+            **update,
+        )
+        server.log.warning(f"update {resource} - result: {result}")
+    async def create_resource(resource, data):
+        result = await server.db.tables[resource].insert(
+            **data
+        )
+        server.log.warning(f"insert {resource} - result: {result}")
 
+    @server.get('/auth/export', tags=['Config'])
+    async def export_auth_config():
+        return {
+            'users': await users_tb.select('*'),
+            'groups': await groups_tb.select('*'),
+            'roles': await roles_tb.select('*'),
+            'actions': await permissions_tb.select('*')
+        }
+    
+    class Config(BaseModel):
+        users: Optional[List[User]]
+        groups: Optional[List[Group]]
+        roles: Optional[List[Role]]
+        actions: Optional[List[Permission]]
+
+
+    @server.post('/auth/import', tags=['Config'])
+    async def import_auth_config(config: Config):
+        config = dict(config)
+        if 'actions' in config:
+            for action in config['actions']:
+                action = dict(action)
+                try:
+                    await verify_action(action['action'])
+                    await update_resource('permissions', action, 'action')
+                except Exception:
+                    await create_resource('permissions', action)
+
+        if 'roles' in config:
+            for role in config['roles']:
+                role = dict(role)
+                for action in role['permissions']['actions']:
+                    await verify_action(action)
+                try:
+                    await verify_role(role['role'])
+                except Exception:
+                    await create_resource('roles', role)
+                    continue
+                await update_resource('roles', role, 'role')
+        
+        if 'groups' in config:
+            for group in config['groups']:
+                group = dict(group)
+                for role_name in group['roles']['roles']:
+                    await verify_role(role_name)
+                try:
+                    await verify_group(group['group_name'])
+                except Exception:
+                    await create_resource('groups', group)
+                    continue
+                await update_resource('groups', group, 'group_name')
+
+        if 'users' in config:
+            for user in config['users']:
+                user = dict(user)
+                if 'groups' in user:
+                    for group_name in user['groups']['groups']:
+                        await verify_group(group_name)
+                try:
+                    await verify_user(user['username'])
+                except Exception:
+                    await create_resource('users', user)
+                    continue
+                await update_resource('users', user, 'username')
+        return f"import_auth_config - completed"
 
     @server.get('/auth/serviceaccount/token/{service}', response_model=Token, tags=['Token'])
     async def get_service_account_token(service: str):
