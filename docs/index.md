@@ -203,7 +203,29 @@ When providing a username & password, the EasyAuthServer returns a Bearer Token 
 - mysql
 - postgres
 
-#### Preparing a env.json
+### Import / Export Config
+
+#### Importing
+Pre-existing / Backup configuration can be added via Import Auth Config, or existing entries will be updated. 
+
+!!! TIP "Auth Dependencies"
+    Dependencies are added first, and missing dependencies will be indicated
+
+!!!  Warning
+    Importing will override existing configuration, if listed in the request Body
+
+![](./images/import-export.png)
+
+#### Exporting
+Auth Configuration can be exported to JSON to quickly review all configuration, save as a backup, restore in a new location / database. 
+
+!!! TIP "Exporting Configuration"
+    Export exisiting configuration to a JSON file containing all configuers users, groups, roles & permissions.
+
+![](./images/export.png)
+
+
+### Preparing a env.json
 ```bash
 cat > server_env.json << EOF
 {
