@@ -2,3 +2,12 @@ site_name: EasyAuth
 theme: readthedocs
 markdown_extensions:
   - admonition
+nav:
+  - Home: index.md
+  - Setup: installation.md
+  - Server Usage: server_usage.md
+  - Client Usage: client_usage.md
+  - RBAC: rbac.md
+  - Database Usage: databases.md
+  - Importing / Exporting config: import_export.md
+  - Contribute: contribute.md
