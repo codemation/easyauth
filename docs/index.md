@@ -211,8 +211,8 @@ Pre-existing / Backup configuration can be added via Import Auth Config, or exis
 !!! TIP "Auth Dependencies"
     Dependencies are added first, and missing dependencies will be indicated
 
-!!!  Warning
-    Importing will override existing configuration, if listed in the request Body
+!!! DANGER
+    Importing will override existing configuration listed in the request body
 
 ![](./images/import-export.png)
 
