@@ -155,8 +155,8 @@ async def frontend_setup(server):
                     buttons.get_button(
                         action,
                         color='success', 
-                        href=f'/action/{role}'
-                    ) for actions in actions
+                        href=f'/action/{action}'
+                    ) for action in actions
                 ]),
                 size=4
             )
