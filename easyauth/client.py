@@ -82,7 +82,6 @@ class EasyAuthClient:
             username: str = Form(...), 
             password: str = Form(...),
         ):
-            print(request.cookies)
             token = None
             async with ClientSession() as client:
                 token = await client.post(
@@ -255,7 +254,6 @@ class EasyAuthClient:
                 token = kwargs['token']
                 if token ==  'NO_TOKEN':
                     if response_class is HTMLResponse or 'text/html' in request.headers['accept']:
-                        print(request.headers)
                         response = HTMLResponse(
                             self.admin.login_page(
                                 welcome_message='Login Required'
@@ -266,7 +264,6 @@ class EasyAuthClient:
                         response.set_cookie('ref', request.__dict__['scope']['path'])
                         return response
                 try:
-                    print(token)
                     token = self.decode_token(token)[1]
                     self.log.debug(f"decoded token: {token}")
                 except Exception:

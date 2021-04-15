@@ -378,7 +378,6 @@ class EasyAuthServer:
                 token = kwargs['token']
                 if token ==  'NO_TOKEN':
                     if response_class is HTMLResponse or 'text/html' in request.headers['accept']:
-                        print(request.headers)
                         response = HTMLResponse(
                             self.admin.login_page(
                                 welcome_message='Login Required'
