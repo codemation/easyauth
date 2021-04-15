@@ -1,9 +1,11 @@
-from typing import Optional, List
+from typing import Optional, List, Union
 from pydantic import BaseModel
-from fastapi import HTTPException, Depends
+from starlette.status import HTTP_302_FOUND
+from fastapi import HTTPException, Depends, Form, Response, Request
+from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.security import OAuth2PasswordRequestForm
-
 from easyauth.models import User, Service, Group, Role, Permission
+from aiohttp import ClientSession
 
 
 async def api_setup(server):
@@ -20,19 +22,19 @@ async def api_setup(server):
     async def verify_user(user):
         if await users_tb[user] is None:
             # raise group does not exist
-            raise HTTPException(status_code=400, detail=f"no user with name {user} exists")
+            raise HTTPException(status_code=404, detail=f"no user with name {user} exists")
     async def verify_group(group):
         if await groups_tb[group] is None:
             # raise group does not exist
-            raise HTTPException(status_code=400, detail=f"no group with name {group} exists, create first")
+            raise HTTPException(status_code=404, detail=f"no group with name {group} exists, create first")
     async def verify_role(role):
         if await roles_tb[role] is None:
             # raise group does not exist
-            raise HTTPException(status_code=400, detail=f"no role with name {role} exists, create first")
+            raise HTTPException(status_code=404, detail=f"no role with name {role} exists, create first")
     async def verify_action(action):
         if await permissions_tb[action] is None:
             # raise group does not exist
-            raise HTTPException(status_code=400, detail=f"no action with name {action} exists, create first")
+            raise HTTPException(status_code=404, detail=f"no action with name {action} exists, create first")
     
     async def update_resource(resource, update, key):
         key_value = update.pop(key)
@@ -121,7 +123,7 @@ async def api_setup(server):
 
         if not service_user['account_type'] == 'service':
             raise HTTPException(status_code=400, detail=f"user {service} is not a service type account")
-        permissions = await server.get_user_permissions(service_user)
+        permissions = await server.get_user_permissions(service)
 
         token = server.issue_token(permissions, days=999)
 
@@ -138,7 +140,7 @@ async def api_setup(server):
             user = await server.db.tables['users'].select('*', where={'username': user_in_token})
             server.log.warning(f"refresh_access_token: called for user: {user[0]}")
             # get user permissions
-            permissions = await server.get_user_permissions(user[0])
+            permissions = await server.get_user_permissions(user_in_token)
 
             # generate RSA token
             token = server.issue_token(permissions)
@@ -156,6 +158,29 @@ async def api_setup(server):
                 detail="token is invalid or expired"
             )
 
+    @server.server.post('/auth/token/login', response_model=Token, tags=['Token'])
+    async def login_for_auth_token(authentication: dict):
+        username = authentication.get('username')
+        password = authentication.get('password')
+        if not username or not password:
+            raise HTTPException(
+                status_code=401, 
+                detail="unable to authenticate with provided credentials"
+            )
+        user = await server.validate_user_pw(username, password)
+        if user:
+            permissions = await server.get_user_permissions(user[0]['username'])
+            token = server.issue_token(permissions)
+            server.log.warning(f"token generated: {type(token)}")
+            return {
+                "access_token": token, 
+                "token_type": "bearer"
+            }
+        raise HTTPException(
+            detail=f"invalid username / password", status_code=401
+        )
+        
+
     @server.server.post('/auth/token', response_model=Token, tags=['Token'])
     async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
         server.log.debug(f"login_for_access_token: form_data {form_data}")
@@ -166,7 +191,7 @@ async def api_setup(server):
                 detail="unable to authenticate with provided credentials"
             )
         # get user permissions
-        permissions = await server.get_user_permissions(user[0])
+        permissions = await server.get_user_permissions(form_data.username)
 
         # generate RSA token
         token = server.issue_token(permissions)
@@ -176,9 +201,67 @@ async def api_setup(server):
             "token_type": "bearer"
         }
 
-    @server.put('/auth/user', status_code=201, actions=['CREATE_USER'], tags=['Users'])
+    @server.server.get("/login/re", tags=['Login'], response_class=HTMLResponse, include_in_schema=False)
+    async def login_redirect_get(response: Response):
+        return server.admin.login_page(welcome_message='Login Required')
+
+    @server.server.post("/login/re", tags=['Login'], response_class=HTMLResponse, include_in_schema=False)
+    async def login_redirect(response: Response):
+        return server.admin.login_page(welcome_message='Login Required')
+
+    @server.server.post("/login", tags=['Login'], response_class=HTMLResponse, include_in_schema=False)
+    async def login_page(
+        request: Request,
+        response: Response,
+        username: str = Form(...), 
+        password: str = Form(...),
+    ):
+        server.log.warning(f"login_page {username}")
+        user = await server.validate_user_pw(username, password)
+        
+        if not user:
+            return server.admin.login_page(welcome_message="logged out - Login Required")
+            raise HTTPException(
+                status_code=401, 
+                detail="unable to authenticate with provided credentials"
+            )
+
+        # get user permissions
+        permissions = await server.get_user_permissions(username)
+
+        token = server.issue_token(permissions)
+
+        # add token to cookie
+        response.set_cookie('token', token)
+        redirect_ref = '/'
+
+        if 'ref' in request.cookies:
+            redirect_ref = request.cookies['ref']
+            response.delete_cookie('ref')
+
+        return RedirectResponse(redirect_ref, headers=response.headers, status_code=HTTP_302_FOUND)
+    @server.server.get("/logout", tags=['Login'], response_class=HTMLResponse)
+    async def logout_page(
+        response: Response
+    ):
+        response.set_cookie('token', 'INVALID')
+        return RedirectResponse('/login', headers=response.headers)
+
+    @server.server.post("/logout", tags=['Login'], response_class=HTMLResponse)
+    async def logout_page_post(
+        response: Response,
+    ):
+        response.set_cookie('token', 'INVALID')
+        return RedirectResponse('/login/re', headers=response.headers)
+
+    @server.put('/auth/user', status_code=201, tags=['Users'])
     async def create_user(user: User):
         user = dict(user)
+
+        # list -> dict conversion for db storage
+        if isinstance(user['groups'], list):
+            user['groups'] = {'groups': user['groups']}
+
         if not await users_tb[user['username']] is None:
             raise HTTPException(status_code=400, detail=f"{user['username']} already exists")
         for group in user['groups']['groups']:
@@ -196,6 +279,11 @@ async def api_setup(server):
     @server.put('/auth/service', status_code=201, actions=['CREATE_USER'], tags=['Users'])
     async def create_service(service: Service):
         service = dict(service)
+
+        # list -> dict conversion for db storage
+        if isinstance(service['groups'], list):
+            service['groups'] = {'groups': service['groups']}
+
         if not await users_tb[service['username']] is None:
             raise HTTPException(status_code=400, detail=f"{service['username']} already exists")
 
@@ -216,7 +304,7 @@ async def api_setup(server):
         full_name: Optional[str]
         password: Optional[str]
         email: Optional[str]
-        groups: Optional[UserGroup]
+        groups: Optional[Union[list, UserGroup]]
 
     @server.post('/auth/user/{username}', tags=['Users'])
     async def update_user(
@@ -228,9 +316,12 @@ async def api_setup(server):
         update = {k: v for k, v in dict(update).items() if not v is None}
 
         to_update = {}
-        for k, v in dict(update).items():
+        for k, v in update.copy().items():
             if k == 'groups':
-                to_update[k] = dict(v)
+                if isinstance(v, list):
+                    update[k] = {'groups': v}
+
+                to_update[k] = update[k]
                 for group in to_update[k]['groups']:
                     await verify_group(group)
             else:
@@ -251,7 +342,7 @@ async def api_setup(server):
 
     @server.delete('/auth/user', tags=['Users'])
     async def delete_user(username: str):
-        await verify_user(user)
+        await verify_user(username)
         await users_tb.delete(where={'username': username})
         return f"{username} deleted"
 
@@ -261,15 +352,27 @@ async def api_setup(server):
 
     @server.get('/auth/users/{username}', tags=['Users'])
     async def get_user(username: str):
+        return await get_user_details(username)
+
+    async def get_user_details(username: str):
         await verify_user(username)
         user = await users_tb[username]
+        user = user.copy()
+        permissions = await server.get_user_permissions(username)
+        user['permissions'] = permissions
         return user
+        
+    server.get_user_details = get_user_details
 
     # Groups
 
     @server.put('/auth/group', status_code=201, tags=['Groups'])
     async def create_group(group: Group):
         group = dict(group)
+    
+        # list -> dict conversion for db storage
+        if isinstance(group['roles'], list):
+            group['roles'] = {'roles': group['roles']}
 
         if not await groups_tb[group['group_name']] is None:
             raise HTTPException(status_code=400, detail=f"{group['group_name']} already exists")
@@ -283,7 +386,7 @@ async def api_setup(server):
     class UpdateRoles(BaseModel):
         roles: list
 
-    @server.post('/auth/groups', status_code=201, tags=['Groups'])
+    @server.post('/auth/group/{group}', status_code=201, tags=['Groups'])
     async def update_group(group: str, roles: UpdateRoles):
         roles = dict(roles)
         await verify_group(group)
@@ -317,6 +420,10 @@ async def api_setup(server):
     async def create_role(role: Role):
         role = dict(role)
 
+        # list -> dict conversion for db storage
+        if isinstance(role['permissions'], list):
+            role['permissions'] = {'actions': role['permissions']}
+
         if not await roles_tb[role['role']] is None:
             raise HTTPException(status_code=400, detail=f"{role['role']} already exists")
         
@@ -329,7 +436,7 @@ async def api_setup(server):
     class UpdateActions(BaseModel):
         actions: list
 
-    @server.post('/auth/roles', status_code=201, tags=['Roles'])
+    @server.post('/auth/role/{role}', status_code=201, tags=['Roles'])
     async def update_role(role: str, actions: UpdateActions):
         actions = dict(actions)
         await verify_role(role)
@@ -338,7 +445,7 @@ async def api_setup(server):
 
         await roles_tb.update(
             permissions={'actions': actions['actions']},
-            where={'role': role.pop('role')}
+            where={'role': role}
         )
         return f"existing role updated"
 

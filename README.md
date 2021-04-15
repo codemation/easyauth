@@ -9,6 +9,13 @@ Create a centralized Authentication and Authorization token server. Easily secur
 
 [https://easyauth.readthedocs.io/en/latest/](https://easyauth.readthedocs.io/en/latest/)
 
+## Key Features
+- Centralized Authentication - Create Users / Groups / Roles / Actions once, use everywhere. 
+- Admin GUI 
+- JWT Token Authentication with RSA private / public key verification
+- Easily backup / restore configration
+- Builtin client login & cookie system
+
 ## Quick Start
 ```bash
 
@@ -114,6 +121,7 @@ async def startup():
     async def action():
         return f"I am actions"
 ```
+![](docs/images/login.png)
 
 
 ## Server 
@@ -121,9 +129,12 @@ async def startup():
 
 ![](docs/images/api.png)
 
+### GUI
+![](images/EasyAuthGUI.png)
 
 ## Client
 
 ![](images/client.png)
 
 ![](images/OAuth.png)
+

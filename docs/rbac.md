@@ -46,3 +46,10 @@ Tokens are created for a specifc user, that contain the full permissions tree fo
 
 !!! TIP "service token"
     Expires ~900 days 
+
+!!! TIP "Consideration on Cookies"
+    Cookies are invalidated by the EasyAuthClient if the token inside the cookie has expired.
+
+
+ 
+

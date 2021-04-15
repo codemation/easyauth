@@ -78,3 +78,6 @@ INFO:     Uvicorn running on http://0.0.0.0:8330 (Press CTRL+C to quit)
 !!! INFO
     Navigate to 0.0.0.0:8330/docs
 ![](images/api.png)
+
+### GUI
+![](images/EasyAuthGUI.png)

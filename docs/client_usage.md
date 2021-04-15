@@ -71,3 +71,14 @@ EasyAuth allows endpoints to be as exclusive or as inclusive as needed. Authoriz
 
 ![](images/client.png)
 ![](images/OAuth.png)
+
+### Cookies
+EasyAuth client endpoints, decorated by the auth router, that serve HTML responses or static webcontent are provided default integrated login endpoints at /login /logout.
+
+![](images/login.png)
+
+
+!!! Note
+    Once logged in, the browser will contain a authenticatin cookie that matches the users token
+
+![](images/cookie.png)

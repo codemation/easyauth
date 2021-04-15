@@ -6,3 +6,5 @@ fastapi
 uvicorn
 pyjwt
 python-multipart
+easyadmin
+aiohttp

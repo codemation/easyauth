@@ -6,10 +6,14 @@ import datetime
 import json
 import logging
 import asyncio
-from fastapi import FastAPI, Depends, HTTPException
+from starlette.status import HTTP_302_FOUND
+from fastapi import FastAPI, Depends, HTTPException, Form, Response, Request
 from fastapi.security import OAuth2PasswordBearer
+from fastapi.responses import HTMLResponse, RedirectResponse
 from makefun import wraps
 from inspect import signature, Parameter
+from easyadmin import Admin
+from aiohttp import ClientSession
 
 
 class EasyAuthClient:
@@ -25,6 +29,9 @@ class EasyAuthClient:
         self.server = server
         self.oauth2_scheme = OAuth2PasswordBearer(tokenUrl=token_url) # /token
         self.DEFAULT_PERMISSION = default_permission
+
+        self.admin = Admin('EasyAuthClient', side_bar_sections=[])
+        self.token_url = token_url
 
         # logging setup # 
         self.log = logger
@@ -47,7 +54,8 @@ class EasyAuthClient:
         logger: logging.Logger = None,
         debug: bool = False,
         env_from_file: str = None,
-        default_permissions: str = {'groups': ['administrators']}
+        default_permissions: str = {'groups': ['administrators']},
+        default_login_redirect: str = '/'
     ):
         auth_server = cls(
             server,
@@ -57,9 +65,107 @@ class EasyAuthClient:
             env_from_file,
             default_permissions
         )
+        @server.get('/login', response_class=HTMLResponse)
+        async def login(request: Request, response: Response):
+            return auth_server.get_login_page("Login to Begin")
+        
+        @server.post('/login/re', response_class=HTMLResponse)
+        async def login(request: Request, response: Response):
+            response.delete_cookie('ref')
+        
 
+
+        @server.post("/login", tags=['Login'], response_class=HTMLResponse)
+        async def login_page(
+            request: Request,
+            response: Response,
+            username: str = Form(...), 
+            password: str = Form(...),
+        ):
+            print(request.cookies)
+            token = None
+            async with ClientSession() as client:
+                token = await client.post(
+                    auth_server.token_url+'/login',
+                    json={'username': username, 'password': password}
+                )
+                token_results = await token.json()
+                if not token.status == 200:
+                    return HTMLResponse(
+                        auth_server.get_login_page(
+                            token_results['detail']
+                        ),
+                        status_code=token.status
+                    )
+                response.set_cookie('token', token_results['access_token'])
+                response.status_code=200
+            
+            redirect_ref = default_login_redirect
+            if 'ref' in request.cookies:
+                redirect_ref = request.cookies['ref']
+                response.delete_cookie('ref')
+
+            return RedirectResponse(
+                redirect_ref, 
+                headers=response.headers, 
+                status_code=HTTP_302_FOUND
+            )
+
+
+        @server.get("/logout", tags=['Login'], response_class=HTMLResponse)
+        async def logout_page(
+            response: Response
+        ):
+            response.set_cookie('token', 'INVALID')
+            return RedirectResponse('/login', headers=response.headers)
+
+        @server.post("/logout", tags=['Login'], response_class=HTMLResponse)
+        async def logout_page_post(
+            response: Response,
+        ):
+            response.set_cookie('token', 'INVALID')
+            return RedirectResponse('/login/re', headers=response.headers)
+
+        @server.middleware('http')
+        async def detect_token_in_cookie(request, call_next):
+            request_dict = dict(request)
+            request_header = dict(request.headers)
+            token_in_cookie = None
+            auth_ind = None
+            cookie_ind = None
+            for i, header in enumerate(request_dict['headers']):
+                if 'authorization' in header[0].decode():
+                    if not header[1] is None:
+                        auth_ind = i
+                if 'cookie' in header[0].decode():
+                    cookie_ind = i
+                    cookies = header[1].decode().split(',')
+                    for cookie in cookies[0].split('; '):
+                        key, value = cookie.split('=')
+                        if key == 'token':
+                            token_in_cookie = value
+            if token_in_cookie and not token_in_cookie == 'INVALID':
+                if auth_ind:
+                    request_dict['headers'].pop(auth_ind)
+                if not request_dict['path'] == '/login':
+                    request_dict['headers'].append(
+                        ('authorization'.encode(), f'bearer {token_in_cookie}'.encode())
+                    )
+                else:
+                    return RedirectResponse('/logout')
+            else:
+                if not request_dict['path'] == '/login':
+                    token_in_cookie = 'NO_TOKEN' if not token_in_cookie else token_in_cookie
+                    request_dict['headers'].append(
+                        ('authorization'.encode(), f'bearer {token_in_cookie}'.encode())
+                    )
+            return await call_next(request)
         return auth_server
-
+    def get_login_page(self, message):
+        return self.admin.login_page(
+            welcome_message=message,
+            login_action='/login'
+        )
     def load_env_from_file(self, file_path):
         self.log.warning(f"loading env vars from {file_path}")
         with open(file_path, 'r') as json_env:
@@ -90,18 +196,33 @@ class EasyAuthClient:
                 ['RS256']
             )
 
-    def router(self, path, method, permissions: list, send_token: bool, *args, **kwargs):
+    def router(self, path, method, permissions: list, send_token: bool = False, *args, **kwargs):
+        response_class = kwargs.get('response_class')
+
         def auth_endpoint(func):
-            
+            send_token = False
+            send_request = False
             func_sig = signature(func)
             params = list(func_sig.parameters.values())
+            for ind, param in enumerate(params.copy()):
+                if param.name == 'request' and param._annotation == Request:
+                    send_request = True
+                if param.name == 'token' and param.annotation == str:
+                    send_token = True
+                    params.pop(ind)
 
             token_parameter = Parameter(
-                    'token', 
-                    kind=Parameter.POSITIONAL_OR_KEYWORD, 
-                    default=Depends(self.oauth2_scheme), 
-                    annotation=str
-                )
+                'token', 
+                kind=Parameter.POSITIONAL_OR_KEYWORD, 
+                default=Depends(self.oauth2_scheme), 
+                annotation=str
+            )
+            if not send_request:
+                request_parameter = Parameter(
+                        'request', 
+                        kind=Parameter.POSITIONAL_OR_KEYWORD,
+                        annotation=Request
+                    )
 
             args_index = [str(p) for p in params]
             kwarg_index = None
@@ -114,32 +235,54 @@ class EasyAuthClient:
                     arg_index = i
             
             if arg_index:
+                if not send_request:
+                    params.insert(0, request_parameter)
                 params.insert(arg_index-1, token_parameter)
-            elif not kwarg_index is None and arg_index is None:
-                params.insert(kwarg_index, token_parameter)
-            else:
+            elif not kwarg_index:
+                if not send_request:
+                    params.insert(0, request_parameter)
                 params.append(token_parameter)
-                    
-            """
-            params.append(
-                Parameter(
-                    'token', 
-                    kind=Parameter.POSITIONAL_OR_KEYWORD, 
-                    default=Depends(self.oauth2_scheme), 
-                    annotation=str
-                )
-            )
-            """
-            new_sig = func_sig.replace(parameters=params)
+            ## ** kwargs
+            else:
+                if not send_request:
+                    params.insert(0, request_parameter)
+                params.insert(kwarg_index-1, token_parameter)
 
+            new_sig = func_sig.replace(parameters=params)
             @wraps(func, new_sig=new_sig)
-            async def mock_function(token: str = Depends(self.oauth2_scheme), *args, **kwargs):
+            async def mock_function(*args, **kwargs):
+                request = kwargs['request']
+                token = kwargs['token']
+                if token ==  'NO_TOKEN':
+                    if response_class is HTMLResponse or 'text/html' in request.headers['accept']:
+                        print(request.headers)
+                        response = HTMLResponse(
+                            self.admin.login_page(
+                                welcome_message='Login Required'
+                            ),
+                            status_code=401
+                        )
+                        response.set_cookie('token', 'INVALID')
+                        response.set_cookie('ref', request.__dict__['scope']['path'])
+                        return response
                 try:
+                    print(token)
                     token = self.decode_token(token)[1]
                     self.log.debug(f"decoded token: {token}")
                 except Exception:
                     self.log.exception(f"error decoding token")
+                    if response_class is HTMLResponse:
+                        response = HTMLResponse(
+                            self.admin.login_page(
+                                welcome_message='Login Required'
+                            ),
+                            status_code=401
+                        )
+                        response.set_cookie('token', 'INVALID')
+                        response.headers['ref'] = request.__dict__['scope']['path']
+                        return response
                     raise HTTPException(status_code=401, detail=f"not authorized, invalid or expired")
+
                 allowed = False
                 for auth_type, values in permissions.items():
                     if not auth_type in token['permissions']:
@@ -149,19 +292,32 @@ class EasyAuthClient:
                         if value in token['permissions'][auth_type]:
                             allowed = True
                             break
-                if not allowed:    
+                if not allowed:
+                    if response_class is HTMLResponse:
+                        response = HTMLResponse(
+                            self.admin.forbidden_page(),
+                            status_code=403
+                        )
+                        response.set_cookie('token', 'INVALID')
+                        return response
                     raise HTTPException(
                         status_code=403, 
                         detail=f"not authorized, permissions required: {permissions}"
                     )
-                if send_token:
-                    kwargs['access_token'] = token
-                    result = func(*args, **kwargs)
-                else:
-                    result = func(*args, **kwargs)
+
+                if 'access_token' in kwargs:
+                    kwargs['access_token'] = kwargs['token']
+
+                if not send_token:
+                    del kwargs['token']
+                if not send_request:
+                    del kwargs['request']
+                
+                result = func(*args, **kwargs)
                 if asyncio.iscoroutine(result): 
                     return await result
                 return result
+
             mock_function.__name__ = func.__name__       
 
             route = getattr(self.server, method)

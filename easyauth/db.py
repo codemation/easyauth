@@ -36,7 +36,8 @@ async def database_setup(server):
             host=DB_HOST,
             port=DB_PORT,
             db_type=DB_TYPE,
-            cache_enabled=True
+            cache_enabled=True,
+            #debug=True
         )
 
     else:

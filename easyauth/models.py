@@ -1,23 +1,23 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Union
 
 class User(BaseModel):
     username: str = None
     password: Optional[str] = None
     full_name: Optional[str] = None
     email: str = None
-    groups: dict = {'groups': ['<group_name>']}
+    groups: Union[list, dict] = None
 class Service(BaseModel):
     username: str = None
-    groups: dict = {'groups': ['<group_name>']}
+    groups: Union[list, dict] = ['<group_name>']
 
 class Group(BaseModel):
     group_name: str
-    roles: dict = {'roles': ['auth']}
+    roles: Union[list, dict] = ['<role_name>']
 
 class Role(BaseModel):
     role: str
-    permissions: dict = {'actions': ['CREATE_USER']}
+    permissions: Union[list,dict] = ['CREATE_USER']
 
 class Permission(BaseModel):
     action: str = "CREATE_USER|CREATE_GROUP"
