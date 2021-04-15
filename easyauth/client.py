@@ -107,7 +107,7 @@ class EasyAuthClient:
             return RedirectResponse(
                 redirect_ref, 
                 headers=response.headers, 
-                status_code=HTTP_302_FOUND
+                status_code=HTTP_302_FOfUND
             )
 
 
@@ -158,7 +158,13 @@ class EasyAuthClient:
                     request_dict['headers'].append(
                         ('authorization'.encode(), f'bearer {token_in_cookie}'.encode())
                     )
-            return await call_next(request)
+            response = await call_next(request)
+            if response.status_code == 404 and 'text/html' in request.headers['accept']:
+                return HTMLResponse(
+                    auth_server.not_found_page(),
+                    status_code=404
+                )
+            return response
         return auth_server
     def get_login_page(self, message):
         return self.admin.login_page(
