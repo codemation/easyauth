@@ -290,7 +290,7 @@ class EasyAuthClient:
                             allowed = True
                             break
                 if not allowed:
-                    if response_class is HTMLResponse:
+                    if response_class is HTMLResponse or 'text/html' in request.headers['accept']:
                         response = HTMLResponse(
                             self.admin.forbidden_page(),
                             status_code=403
