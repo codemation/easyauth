@@ -130,7 +130,7 @@ async def startup():
 ![](docs/images/api.png)
 
 ### GUI
-![](images/EasyAuthGUI.png)
+![](docs/images/EasyAuthGUI.png)
 
 ## Client
 
