@@ -161,7 +161,7 @@ class EasyAuthClient:
             response = await call_next(request)
             if response.status_code == 404 and 'text/html' in request.headers['accept']:
                 return HTMLResponse(
-                    auth_server.not_found_page(),
+                    auth_server.admin.not_found_page(),
                     status_code=404
                 )
             return response
