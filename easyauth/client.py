@@ -15,6 +15,8 @@ from inspect import signature, Parameter
 from easyadmin import Admin
 from aiohttp import ClientSession
 
+from easyauth.router import EasyAuthAPIRouter
+
 
 class EasyAuthClient:
     def __init__(
@@ -32,6 +34,9 @@ class EasyAuthClient:
 
         self.admin = Admin('EasyAuthClient', side_bar_sections=[])
         self.token_url = token_url
+
+        # extra routers
+        self.api_routers = []
 
         # logging setup # 
         self.log = logger
@@ -73,7 +78,10 @@ class EasyAuthClient:
         async def login(request: Request, response: Response):
             response.delete_cookie('ref')
         
-
+        @server.on_event('startup')
+        async def setup():
+            auth_server.log.warning(f"adding routers")
+            await auth_server.include_routers()
 
         @server.post("/login", tags=['Login'], response_class=HTMLResponse)
         async def login_page(
@@ -166,6 +174,18 @@ class EasyAuthClient:
                 )
             return response
         return auth_server
+
+    async def include_routers(self):
+        for auth_api_router in self.api_routers:
+            self.server.include_router(auth_api_router.server)
+
+    def create_api_router(self, *args, **kwargs):
+        api_router = EasyAuthAPIRouter.create(self, *args, **kwargs)
+        self.api_routers.append(
+            api_router
+        )
+        return api_router
+
     def get_login_page(self, message):
         return self.admin.login_page(
             welcome_message=message,
