@@ -72,7 +72,7 @@ async def frontend_setup(server):
     
     @server.get('/user/{username}', response_class=HTMLResponse, send_token=True, include_in_schema=False)
     async def admin_user_page(username: str, access_token: str = None):
-        users = await server.db.tables['users'].select(
+        users = await server.auth_users.select(
             'username', where={'username': username}
         )
         if not users:
@@ -81,7 +81,7 @@ async def frontend_setup(server):
                 detail=f"No User with name {username} exists"
             )
             
-        groups = await server.db.tables['groups'].select('group_name')
+        groups = await server.auth_groups.select('group_name')
         groups = deepcopy([group['group_name'] for group in groups])
 
         user_page = admin.get_admin_page(
@@ -165,12 +165,12 @@ async def frontend_setup(server):
 
     
     async def _admin_users(access_token: str):
-        users = await server.db.tables['users'].select(
+        users = await server.auth_users.select(
             'username', 'full_name', 'email', 'account_type', 'groups'
         )
         users = users.copy()
         
-        groups = await server.db.tables['groups'].select('group_name')
+        groups = await server.auth_groups.select('group_name')
         groups = deepcopy([group['group_name'] for group in groups])
         modals = [logout_modal]
 
@@ -247,7 +247,7 @@ async def frontend_setup(server):
         )
 
     async def get_group_details(group_name: str):
-        group = await server.db.tables['groups'].select(
+        group = await server.auth_groups.select(
             '*', where={'group_name': group_name}
         )
         if not group:
@@ -257,17 +257,17 @@ async def frontend_setup(server):
             )
         group = group[0]
 
-        all_roles = await server.db.tables['roles'].select('role')
+        all_roles = await server.auth_roles.select('role')
         all_roles = [role['role'] for role in all_roles]
 
         roles = group['roles']['roles'] if isinstance(group['roles'], dict) else group['roles'] 
         roles = [role for role in roles if role in all_roles]
 
         permissions = []
-        all_actions = await server.db.tables['permissions'].select('action')
+        all_actions = await server.auth_actions.select('action')
         all_actions = [action['action'] for action in all_actions]
         for role in roles:
-            actions = await server.db.tables['roles'].select(
+            actions = await server.auth_roles.select(
                 'permissions', where={'role': role}
             )
             for action in actions.copy():
@@ -277,7 +277,7 @@ async def frontend_setup(server):
                     if action in all_actions:
                         permissions.append(action)
 
-        users = await server.db.tables['users'].select('username', 'groups')
+        users = await server.auth_users.select('username', 'groups')
         for user in users.copy():
             if isinstance(user['groups'], dict):
                 user['groups'] = user['groups']['groups']
@@ -346,7 +346,7 @@ async def frontend_setup(server):
 
     @server.get('/group/{group_name}', response_class=HTMLResponse, send_token=True, include_in_schema=False)
     async def admin_group_page(group_name: str, access_token: str = None):
-        group = await server.db.tables['groups'].select(
+        group = await server.auth_groups.select(
             '*', where={'group_name': group_name}
         )
         if not group:
@@ -366,10 +366,10 @@ async def frontend_setup(server):
 
     @server.get('/groups', response_class=HTMLResponse, send_token=True, include_in_schema=False)
     async def admin_groups(access_token=None):
-        groups = await server.db.tables['groups'].select('*')
+        groups = await server.auth_groups.select('*')
 
         groups = groups.copy()
-        roles = await server.db.tables['roles'].select('role')
+        roles = await server.auth_roles.select('role')
 
         roles = deepcopy([role['role'] for role in roles])
         modals = [logout_modal]
@@ -449,7 +449,7 @@ async def frontend_setup(server):
 
 
     async def get_role_details(role_name: str):
-        role = await server.db.tables['roles'].select(
+        role = await server.auth_roles.select(
             '*', where={'role': role_name}
         )
         if not role:
@@ -460,19 +460,19 @@ async def frontend_setup(server):
         role = role[0]
 
         permissions = role['permissions']['actions'] if isinstance(role['permissions'], dict) else role['permissions']
-        all_actions = await server.db.tables['permissions'].select('action')
+        all_actions = await server.auth_actions.select('action')
         all_actions = [action['action'] for action in all_actions]
 
         permissions = [action for action in permissions if action in all_actions]
 
-        all_groups = await server.db.tables['groups'].select('group_name', 'roles')
+        all_groups = await server.auth_groups.select('group_name', 'roles')
         for group in all_groups.copy():
             if isinstance(group['roles'], dict):
                 group['roles'] = group['roles']['roles']
 
         groups = [group['group_name'] for group in all_groups if role_name in group['roles']]
 
-        all_users = await server.db.tables['users'].select('username', 'groups')
+        all_users = await server.auth_users.select('username', 'groups')
         users = []
         for user in all_users.copy():
             if isinstance(user['groups'], dict):
@@ -544,7 +544,7 @@ async def frontend_setup(server):
 
     @server.get('/role/{role_name}', response_class=HTMLResponse, send_token=True, include_in_schema=False)
     async def admin_role_page(role_name: str, access_token=None):
-        role = await server.db.tables['roles'].select(
+        role = await server.auth_roles.select(
             'role', where={'role': role_name}
         )
         if not role:
@@ -564,9 +564,9 @@ async def frontend_setup(server):
 
     @server.get('/roles', response_class=HTMLResponse, send_token=True, include_in_schema=False)
     async def admin_roles(access_token=None):
-        roles = await server.db.tables['roles'].select('*')
+        roles = await server.auth_roles.select('*')
         roles = roles.copy()
-        permissions = await server.db.tables['permissions'].select('action')
+        permissions = await server.auth_actions.select('action')
         permissions = [action['action'] for action in permissions]
         modals = [logout_modal]
         for role in roles:
@@ -636,12 +636,12 @@ async def frontend_setup(server):
                 action='/auth/role'
             )
         )
-        _roles = await server.db.tables['roles'].select('*')
+        _roles = await server.auth_roles.select('*')
 
         return admin_table
 
     async def get_action_details(action: str):
-        permission = await server.db.tables['permissions'].select(
+        permission = await server.auth_actions.select(
             '*', where={'action': action}
         )
         permission = permission.copy()
@@ -652,7 +652,7 @@ async def frontend_setup(server):
             )
         permission = permission[0]
 
-        all_roles = await server.db.tables['roles'].select('*')
+        all_roles = await server.auth_roles.select('*')
         for role in all_roles.copy():
             if isinstance(role['permissions'], dict):
                 role['permissions'] = role['permissions']['actions']
@@ -663,7 +663,7 @@ async def frontend_setup(server):
                 roles.append(role['role'])
                 break
         
-        all_groups = await server.db.tables['groups'].select('group_name', 'roles')
+        all_groups = await server.auth_groups.select('group_name', 'roles')
         for group in all_groups.copy():
             if isinstance(group['roles'], dict):
                 group['roles'] = group['roles']['roles']
@@ -674,7 +674,7 @@ async def frontend_setup(server):
                     groups.append(group['group_name'])
                     break
 
-        all_users = await server.db.tables['users'].select('username', 'groups')
+        all_users = await server.auth_users.select('username', 'groups')
         users = []
         for user in all_users.copy():
             if isinstance(user['groups'], dict):
@@ -739,7 +739,7 @@ async def frontend_setup(server):
         return modal_row
     @server.get('/action/{action}', response_class=HTMLResponse, send_token=True, include_in_schema=False)
     async def admin_action_page(action: str, access_token=None):
-        permission = await server.db.tables['permissions'].select(
+        permission = await server.auth_actions.select(
             '*', where={'action': action}
         )
         if not permission:
@@ -758,7 +758,7 @@ async def frontend_setup(server):
 
     @server.get('/actions', response_class=HTMLResponse, send_token=True, include_in_schema=False)
     async def admin_actions(access_token=None):
-        permissions = await server.db.tables['permissions'].select('*')
+        permissions = await server.auth_actions.select('*')
         modals = [logout_modal]
         for permission in permissions:
             action = permission['action']

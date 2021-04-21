@@ -14,10 +14,10 @@ async def api_setup(server):
         access_token: str
         token_type: str
 
-    users_tb = server.db.tables['users']
-    groups_tb = server.db.tables['groups']
-    roles_tb = server.db.tables['roles']
-    permissions_tb = server.db.tables['permissions']
+    users_tb = server.auth_users
+    groups_tb = server.auth_groups
+    roles_tb = server.auth_roles
+    permissions_tb = server.auth_actions
 
     async def verify_user(user):
         if await users_tb[user] is None:
@@ -36,19 +36,6 @@ async def api_setup(server):
             # raise group does not exist
             raise HTTPException(status_code=404, detail=f"no action with name {action} exists, create first")
     
-    async def update_resource(resource, update, key):
-        key_value = update.pop(key)
-        result = await server.db.tables[resource].update(
-            where={key: key_value},
-            **update,
-        )
-        server.log.warning(f"update {resource} - result: {result}")
-    async def create_resource(resource, data):
-        result = await server.db.tables[resource].insert(
-            **data
-        )
-        server.log.warning(f"insert {resource} - result: {result}")
-
     @server.get('/auth/export', tags=['Config'])
     async def export_auth_config():
         return {
@@ -73,9 +60,12 @@ async def api_setup(server):
                 action = dict(action)
                 try:
                     await verify_action(action['action'])
-                    await update_resource('permissions', action, 'action')
+                    await server.auth_actions.update(
+                        where={'action': action.pop('action')},
+                        **action
+                    )
                 except Exception:
-                    await create_resource('permissions', action)
+                    await server.auth_actions.insert(**action)
 
         if 'roles' in config:
             for role in config['roles']:
@@ -85,9 +75,12 @@ async def api_setup(server):
                 try:
                     await verify_role(role['role'])
                 except Exception:
-                    await create_resource('roles', role)
+                    await server.auth_roles.insert(**role)
                     continue
-                await update_resource('roles', role, 'role')
+                await server.auth_roles.update(
+                    where={'role': role.pop('role')},
+                    **role
+                )
         
         if 'groups' in config:
             for group in config['groups']:
@@ -97,9 +90,12 @@ async def api_setup(server):
                 try:
                     await verify_group(group['group_name'])
                 except Exception:
-                    await create_resource('groups', group)
+                    await server.auth_groups.insert(**group)
                     continue
-                await update_resource('groups', group, 'group_name')
+                await server.auth_groups.update(
+                    where={'group_name': group.pop('group_name')},
+                    **group
+                )
 
         if 'users' in config:
             for user in config['users']:
@@ -110,9 +106,13 @@ async def api_setup(server):
                 try:
                     await verify_user(user['username'])
                 except Exception:
-                    await create_resource('users', user)
+                    await server.auth_users.insert(**user)
                     continue
-                await update_resource('users', user, 'username')
+
+                await server.auth_users.update(
+                    where={'username': user.pop('username')},
+                    **user
+                )
         return f"import_auth_config - completed"
 
     @server.get('/auth/serviceaccount/token/{service}', response_model=Token, tags=['Token'])

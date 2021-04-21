@@ -14,6 +14,7 @@ from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from makefun import wraps
 from inspect import signature, Parameter
+#from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
 
 from easyauth.db import database_setup
 from easyauth.models import tables_setup
@@ -188,6 +189,29 @@ class EasyAuthServer:
             with open(f"{os.environ['KEY_PATH']}/{os.environ['KEY_NAME']}.pub", 'w') as pb:
                 pb.write(key.export_private())
 
+    def email_setup(self):
+        self.email_conf = ConnectionConfig(**{
+            "MAIL_USERNAME": os.environ['MAIL_USERNAME'],
+            "MAIL_PASSWORD": os.environ['MAIL_PASSWORD'],
+            "MAIL_FROM": os.environ['MAIL_FROM'],
+            "MAIL_PORT": int(os.environ['MAIL_PORT']),
+            "MAIL_SERVER": os.environ['MAIL_SERVER'],
+            "MAIL_FROM_NAME": os.environ['MAIL_FROM_NAME'],
+            "MAIL_TLS": True,
+            "MAIL_SSL": False
+        })
+    async def send_email(subject: str, email: str, recipients: list):
+        body = f"""<p>{email}</p>"""
+        message = MessageSchema(
+            subject=f"{subject}",
+            recipients=[email],  # List of recipients, as many as you can pass 
+            body=body,
+            subtype="html"
+        )
+
+        fm = FastMail(conf)
+        asyncio.create_task(fm.send_message(message))
+        return {"message": "email has been sent", "otp": otp}
 
     def cors_setup(self):
         origins = ['*']
@@ -243,7 +267,7 @@ class EasyAuthServer:
         return self.decode(encoded, auth)
 
     async def validate_user_pw(self, username, password):
-        user = await self.db.tables['users'].select('*', where={'username': username})
+        user = await self.auth_users.select('*', where={'username': username})
         if len(user) > 0:
             if user[0]['account_type'] == 'service':
                 raise HTTPException(status_code=401, detail=f"unable to login with service accounts")
@@ -258,29 +282,26 @@ class EasyAuthServer:
                 # try old auth
                 decoded_password = self.decode_password(user[0]['password'], password)
                 self.log.warning(f"old password used: - updating")
-                await self.db.tables['users'].update(
+                await self.auth_users.update(
                     password=self.encode_password(decoded_password['password']),
                     where={'username': username}
                 )
                 return user
             except Exception as e:
-                self.log.exception(f"Auth failed for user {user} - invalid credentials")
+                self.log.error(f"Auth failed for user {user} - invalid credentials")
         return None
     async def get_user_permissions(self, username: str) -> list:
         """
         accepts validated user returned by validate_user_pw
         returns allowed permissions based on member group's roles / permissonis
         """
-        user = await self.db.tables['users'].select('*', where={'username': username})
+        user = await self.auth_users.select('*', where={'username': username})
         user = user[0]
 
-        groups_table = self.db.tables['groups']
-        roles_table = self.db.tables['roles']
         permissions = {}
-
         groups = user['groups']['groups']
         for group in groups:
-            group_data = await self.db.tables['groups'].select('*', where={'group_name': group})
+            group_data = await self.auth_groups.select('*', where={'group_name': group})
             if not group_data:
                 self.log.error(f"group {group} not found in groups table")
                 continue
@@ -289,7 +310,7 @@ class EasyAuthServer:
             if isinstance(group_data['roles'], dict):
                 group_data['roles'] = group_data['roles']['roles']
             for role in group_data['roles']:
-                role_info = await self.db.tables['roles'].select('*', where={'role': role})
+                role_info = await self.auth_roles.select('*', where={'role': role})
                 if not role_info:
                     self.log.error(f"role {role} not found in roles table - {role_info}")
                     continue
@@ -301,7 +322,7 @@ class EasyAuthServer:
                         permissions['actions'] = []
                     
                     if not action in permissions['actions']:
-                        action_info = await self.db.tables['permissions'].select(
+                        action_info = await self.auth_actions.select(
                             'action', where={'action': action}
                         )
                         if not action_info:
