@@ -115,7 +115,7 @@ class EasyAuthClient:
             return RedirectResponse(
                 redirect_ref, 
                 headers=response.headers, 
-                status_code=HTTP_302_FOfUND
+                status_code=HTTP_302_FOUND
             )
 
 
