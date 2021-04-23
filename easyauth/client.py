@@ -329,7 +329,7 @@ class EasyAuthClient:
                     )
 
                 if 'access_token' in kwargs:
-                    kwargs['access_token'] = kwargs['token']
+                    kwargs['access_token'] = token
 
                 if not send_token:
                     del kwargs['token']
