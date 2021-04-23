@@ -70,11 +70,11 @@ class EasyAuthClient:
             env_from_file,
             default_permissions
         )
-        @server.get('/login', response_class=HTMLResponse)
+        @server.get('/login', response_class=HTMLResponse, include_in_schema=False)
         async def login(request: Request, response: Response):
             return auth_server.get_login_page("Login to Begin")
         
-        @server.post('/login/re', response_class=HTMLResponse)
+        @server.post('/login/re', response_class=HTMLResponse, include_in_schema=False)
         async def login(request: Request, response: Response):
             response.delete_cookie('ref')
         
@@ -83,7 +83,7 @@ class EasyAuthClient:
             auth_server.log.warning(f"adding routers")
             await auth_server.include_routers()
 
-        @server.post("/login", tags=['Login'], response_class=HTMLResponse)
+        @server.post("/login", tags=['Login'], response_class=HTMLResponse, include_in_schema=False)
         async def login_page(
             request: Request,
             response: Response,
@@ -119,14 +119,14 @@ class EasyAuthClient:
             )
 
 
-        @server.get("/logout", tags=['Login'], response_class=HTMLResponse)
+        @server.get("/logout", tags=['Login'], response_class=HTMLResponse, include_in_schema=False)
         async def logout_page(
             response: Response
         ):
             response.set_cookie('token', 'INVALID')
             return RedirectResponse('/login', headers=response.headers)
 
-        @server.post("/logout", tags=['Login'], response_class=HTMLResponse)
+        @server.post("/logout", tags=['Login'], response_class=HTMLResponse, include_in_schema=False)
         async def logout_page_post(
             response: Response,
         ):
