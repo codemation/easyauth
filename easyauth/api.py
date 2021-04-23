@@ -5,8 +5,6 @@ from fastapi import HTTPException, Depends, Form, Response, Request
 from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from easyauth.models import User, Service, Group, Role, Permission
-from aiohttp import ClientSession
-
 
 async def api_setup(server):
 
@@ -137,7 +135,7 @@ async def api_setup(server):
         try:
             token = server.decode_token(token)[1]
             user_in_token = token['permissions']['users'][0]
-            user = await server.db.tables['users'].select('*', where={'username': user_in_token})
+            user = await server.auth_users.select('*', where={'username': user_in_token})
             server.log.warning(f"refresh_access_token: called for user: {user[0]}")
             # get user permissions
             permissions = await server.get_user_permissions(user_in_token)
