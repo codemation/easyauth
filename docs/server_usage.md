@@ -81,3 +81,36 @@ INFO:     Uvicorn running on http://0.0.0.0:8330 (Press CTRL+C to quit)
 
 ### GUI
 ![](images/EasyAuthGUI.png)
+
+### Docker 
+
+#### Start Auth Server
+
+```bash
+mkdir -p $(pwd)/easyauth-vol
+
+docker run --name easyauth \
+    -e DB_TYPE=sqlite \
+    -e DB_NAME=auth \
+    -e DB_LOCAL_PATH=/mnt/easyauth \
+    -e ISSUER=EasyAuth \
+    -e SUBJECT=EasyAuthAuth \
+    -e AUDIENCE=EasyAuthApis \
+    -e KEY_PATH=/mnt/easyauth \
+    -e KEY_NAME=test_key \
+    -v $(pwd)/easyauth-vol:/mnt/easyauth \
+    -p 8220:8220 \
+    -d joshjamison/easyauth:v0.0.0
+```
+
+#### Pull Adminstrator Password from logs
+
+```bash
+$ docker logs easyauth[2021-04-23 15:36:07 +0000] [6] [INFO] Starting gunicorn 20.1.0[2021-04-23 15:36:07 +0000] [6] [INFO] Listening at: http://0.0.0.0:8220 (6)
+[2021-04-23 15:36:07 +0000] [6] [INFO] Using worker: uvicorn.workers.UvicornWorker
+[2021-04-23 15:36:07 +0000] [8] [INFO] Booting worker with pid: 8
+[2021-04-23 15:36:07 +0000] [8] [INFO] Started server process [8]
+[2021-04-23 15:36:07 +0000] [8] [INFO] Waiting for application startup.
+04-23 15:36 EasyAuthServer ERROR    detected new EasyAuth server, created admin user with password: cwmykhzj
+[2021-04-23 15:36:09 +0000] [8] [INFO] Application startup complete.
+```

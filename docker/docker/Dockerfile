@@ -16,6 +16,7 @@ COPY --from=intermediate /easyauth/docker/server /root/app/easyauth
 
 WORKDIR /root/app/easyauth
 
+RUN echo "adding requirements"
 RUN pip3 install -U -r requirements.txt
 
 EXPOSE 8220
