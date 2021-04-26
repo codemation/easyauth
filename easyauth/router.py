@@ -7,7 +7,7 @@ from inspect import signature, Parameter
 
 class EasyAuthAPIRouter:
     def __init__(self,
-        parent, # EasyAuthClient,
+        parent, # EasyAuthClient or EasyAuthServer,
         api_router: APIRouter,
     ):
         self.parent = parent
@@ -132,7 +132,7 @@ class EasyAuthAPIRouter:
                     )
 
                 if 'access_token' in kwargs:
-                    kwargs['access_token'] = kwargs['token']
+                    kwargs['access_token'] = token
 
                 if not send_token:
                     del kwargs['token']

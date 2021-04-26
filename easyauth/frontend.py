@@ -7,33 +7,36 @@ async def frontend_setup(server):
 
     log = server.log
 
+    admin_gui = server.api_routers[1]
+    admin_prefix = server.ADMIN_PREFIX
+
     server.admin = Admin(
-        title='EasyAuth',
-        title_link = '/',
+        title=server.server.title,
+        title_link = admin_prefix,
         side_bar_sections = [
             {
                 'items': [
                     {
                         'name':  'USERS',
-                        'href': '/users',
+                        'href': f'{admin_prefix}/users',
                         'icon': 'user',
                         'items': []
                     },
                     {
                         'name':  'GROUPS',
-                        'href': '/groups',
+                        'href': f'{admin_prefix}/groups',
                         'icon': 'users',
                         'items': []
                     },
                     {
                         'name':  'ROLES',
-                        'href': '/roles',
+                        'href': f'{admin_prefix}/roles',
                         'icon': 'bezier-curve',
                         'items': []
                     },
                     {
                         'name':  'ACTIONS',
-                        'href': '/actions',
+                        'href': f'{admin_prefix}/actions',
                         'icon': 'id-badge',
                         'items': []
                     }
@@ -48,29 +51,29 @@ async def frontend_setup(server):
         body=buttons.get_button(
             'Go Back',
             color='success', 
-            href=f'/'
+            href=f'{admin_prefix}/'
         ) + 
         buttons.get_button(
             'Log out',
             color='danger',
-            href='/logout'
+            href=f'/logout'
         ),
         footer='',
         size='sm'
     )
 
-    @server.get('/', response_class=HTMLResponse, send_token=True, include_in_schema=False)
+    @admin_gui.get('/', response_class=HTMLResponse, send_token=True, include_in_schema=False)
     async def admin_home(access_token=None):
         return await _admin_users(access_token)
-    @server.post('/', response_class=HTMLResponse, send_token=True, include_in_schema=False)
+    @admin_gui.post('/', response_class=HTMLResponse, send_token=True, include_in_schema=False)
     async def re_admin_users(access_token=None):
         return await _admin_users(access_token)
 
-    @server.get('/users', response_class=HTMLResponse, send_token=True, include_in_schema=False)
+    @admin_gui.get('/users', response_class=HTMLResponse, send_token=True, include_in_schema=False)
     async def admin_users(access_token=None):
         return await _admin_users(access_token)
     
-    @server.get('/user/{username}', response_class=HTMLResponse, send_token=True, include_in_schema=False)
+    @admin_gui.get('/user/{username}', response_class=HTMLResponse, send_token=True, include_in_schema=False)
     async def admin_user_page(username: str, access_token: str = None):
         users = await server.auth_users.select(
             'username', where={'username': username}
@@ -133,7 +136,7 @@ async def frontend_setup(server):
                     buttons.get_button(
                         group,
                         color='success', 
-                        href=f'/group/{group}'
+                        href=f'{admin_prefix}/group/{group}'
                     ) for group in groups
                 ]),
                 size=4
@@ -144,7 +147,7 @@ async def frontend_setup(server):
                     buttons.get_button(
                         role,
                         color='success', 
-                        href=f'/role/{role}'
+                        href=f'{admin_prefix}/role/{role}'
                     ) for role in roles
                 ]),
                 size=4
@@ -155,7 +158,7 @@ async def frontend_setup(server):
                     buttons.get_button(
                         action,
                         color='success', 
-                        href=f'/action/{action}'
+                        href=f'{admin_prefix}/action/{action}'
                     ) for action in actions
                 ]),
                 size=4
@@ -188,7 +191,7 @@ async def frontend_setup(server):
                             buttons.get_button(
                                 'Go Back',
                                 color='success', 
-                                href=f'/'
+                                href=f'{admin_prefix}/'
                         )],
                         submit_name='delete user',
                         method='delete',
@@ -207,7 +210,7 @@ async def frontend_setup(server):
                     size='lg'
             ))
             users_table[ind]['groups'] = ''.join([
-                buttons.get_button(group, color='success', href=f'/group/{group}')
+                buttons.get_button(group, color='success', href=f'{admin_prefix}/group/{group}')
                 for group in users_table[ind]['groups']['groups']
             ])
 
@@ -313,7 +316,7 @@ async def frontend_setup(server):
                     buttons.get_button(
                         user,
                         color='success', 
-                        href=f'/user/{user}'
+                        href=f'{admin_prefix}/user/{user}'
                     ) for user in users
                 ]),
                 size=4
@@ -324,7 +327,7 @@ async def frontend_setup(server):
                     buttons.get_button(
                         role,
                         color='success', 
-                        href=f'/role/{role}'
+                        href=f'{admin_prefix}/role/{role}'
                     ) for role in roles
                 ]),
                 size=4
@@ -335,7 +338,7 @@ async def frontend_setup(server):
                     buttons.get_button(
                         action,
                         color='success', 
-                        href=f'/action/{action}'
+                        href=f'{admin_prefix}/action/{action}'
                     ) for action in permissions
                 ]),
                 size=4
@@ -344,7 +347,7 @@ async def frontend_setup(server):
         return modal_row
 
 
-    @server.get('/group/{group_name}', response_class=HTMLResponse, send_token=True, include_in_schema=False)
+    @admin_gui.get('/group/{group_name}', response_class=HTMLResponse, send_token=True, include_in_schema=False)
     async def admin_group_page(group_name: str, access_token: str = None):
         group = await server.auth_groups.select(
             '*', where={'group_name': group_name}
@@ -364,7 +367,7 @@ async def frontend_setup(server):
         )
         return group_page
 
-    @server.get('/groups', response_class=HTMLResponse, send_token=True, include_in_schema=False)
+    @admin_gui.get('/groups', response_class=HTMLResponse, send_token=True, include_in_schema=False)
     async def admin_groups(access_token=None):
         groups = await server.auth_groups.select('*')
 
@@ -388,7 +391,7 @@ async def frontend_setup(server):
                             buttons.get_button(
                                 'Go Back',
                                 color='success', 
-                                href=f'/groups'
+                                href=f'{admin_prefix}/groups'
                         )],
                         submit_name='delete group',
                         method='delete',
@@ -409,7 +412,7 @@ async def frontend_setup(server):
                 buttons.get_button(
                     role,
                     color='success', 
-                    href=f'/role/{role}')
+                    href=f'{admin_prefix}/role/{role}')
                 for role in group['roles'] if role in roles
             ])
 
@@ -512,7 +515,7 @@ async def frontend_setup(server):
                     buttons.get_button(
                         user,
                         color='success', 
-                        href=f'/user/{user}'
+                        href=f'{admin_prefix}/user/{user}'
                     ) for user in users
                 ]),
                 size=4
@@ -523,7 +526,7 @@ async def frontend_setup(server):
                     buttons.get_button(
                         group,
                         color='success', 
-                        href=f'/group/{group}'
+                        href=f'{admin_prefix}/group/{group}'
                     ) for group in groups
                 ]),
                 size=4
@@ -534,7 +537,7 @@ async def frontend_setup(server):
                     buttons.get_button(
                         action,
                         color='success', 
-                        href=f'/action/{action}'
+                        href=f'{admin_prefix}/action/{action}'
                     ) for action in permissions
                 ]),
                 size=4
@@ -542,7 +545,7 @@ async def frontend_setup(server):
         )
         return modal_row
 
-    @server.get('/role/{role_name}', response_class=HTMLResponse, send_token=True, include_in_schema=False)
+    @admin_gui.get('/role/{role_name}', response_class=HTMLResponse, send_token=True, include_in_schema=False)
     async def admin_role_page(role_name: str, access_token=None):
         role = await server.auth_roles.select(
             'role', where={'role': role_name}
@@ -562,7 +565,7 @@ async def frontend_setup(server):
         return role_page
         
 
-    @server.get('/roles', response_class=HTMLResponse, send_token=True, include_in_schema=False)
+    @admin_gui.get('/roles', response_class=HTMLResponse, send_token=True, include_in_schema=False)
     async def admin_roles(access_token=None):
         roles = await server.auth_roles.select('*')
         roles = roles.copy()
@@ -580,7 +583,7 @@ async def frontend_setup(server):
                         buttons.get_button(
                             'Go Back',
                             color='success', 
-                            href=f'/groups'
+                            href=f'{admin_prefix}/groups'
                     )],
                     submit_name='delete role',
                     method='delete',
@@ -601,7 +604,7 @@ async def frontend_setup(server):
                 buttons.get_button(
                     action,
                     color='success', 
-                    href=f'/action/{action}')
+                    href=f'{admin_prefix}/action/{action}')
                 for action in role['permissions'] if action in permissions
             ])
 
@@ -708,7 +711,7 @@ async def frontend_setup(server):
                     buttons.get_button(
                         user,
                         color='success', 
-                        href=f'/user/{user}'
+                        href=f'{admin_prefix}/user/{user}'
                     ) for user in users
                 ]),
                 size=4
@@ -719,7 +722,7 @@ async def frontend_setup(server):
                     buttons.get_button(
                         group,
                         color='success', 
-                        href=f'/group/{group}'
+                        href=f'{admin_prefix}/group/{group}'
                     ) for group in groups
                 ]),
                 size=4
@@ -730,14 +733,14 @@ async def frontend_setup(server):
                     buttons.get_button(
                         role,
                         color='success', 
-                        href=f'/role/{role}'
+                        href=f'{admin_prefix}/role/{role}'
                     ) for role in roles
                 ]),
                 size=4
             )
         )
         return modal_row
-    @server.get('/action/{action}', response_class=HTMLResponse, send_token=True, include_in_schema=False)
+    @admin_gui.get('/action/{action}', response_class=HTMLResponse, send_token=True, include_in_schema=False)
     async def admin_action_page(action: str, access_token=None):
         permission = await server.auth_actions.select(
             '*', where={'action': action}
@@ -756,7 +759,7 @@ async def frontend_setup(server):
         )
         return action_page
 
-    @server.get('/actions', response_class=HTMLResponse, send_token=True, include_in_schema=False)
+    @admin_gui.get('/actions', response_class=HTMLResponse, send_token=True, include_in_schema=False)
     async def admin_actions(access_token=None):
         permissions = await server.auth_actions.select('*')
         modals = [logout_modal]
@@ -771,7 +774,7 @@ async def frontend_setup(server):
                             buttons.get_button(
                                 'Go Back',
                                 color='success', 
-                                href=f'/actions'
+                                href=f'{admin_prefix}/actions'
                         )],
                         submit_name='delete action',
                         method='delete',

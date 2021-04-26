@@ -8,7 +8,7 @@ import json
 import logging
 import asyncio
 from starlette.status import HTTP_302_FOUND
-from fastapi import FastAPI, Depends, HTTPException, Request
+from fastapi import FastAPI, Depends, HTTPException, Request, APIRouter
 from fastapi.security import OAuth2PasswordBearer
 from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,21 +20,31 @@ from easyauth.db import database_setup
 from easyauth.models import tables_setup
 from easyauth.api import api_setup
 from easyauth.frontend import frontend_setup
+from easyauth.router import EasyAuthAPIRouter
 
 class EasyAuthServer:
     def __init__(
         self, 
-        server: FastAPI, 
+        server: FastAPI,
         token_url: str,
+        admin_title: str = 'EasyAuth',
+        admin_prefix: str = '/admin',
         logger: logging.Logger = None,
         debug: bool = False,
         env_from_file: str = None,
         default_permission: dict = {'groups': ['administrators']}
     ):
         self.server = server
-        self.server.title = 'EasyAuth'
+        self.server.title = admin_title
+        self.ADMIN_PREFIX = admin_prefix
         self.oauth2_scheme = OAuth2PasswordBearer(tokenUrl=token_url) # /token
         self.DEFAULT_PERMISSION = default_permission
+
+        # extra routers
+        self.api_routers = []
+        self.create_api_router()                            # API Router
+        self.create_api_router(prefix=self.ADMIN_PREFIX)    # ADMIN GUI Router
+
 
         # logging setup # 
         self.log = logger
@@ -121,11 +131,18 @@ class EasyAuthServer:
                 log.error(f"Internal error - 500 - with request: {request.__dict__}")
             return response
 
+        @server.on_event('startup')
+        async def setup():
+            self.log.warning(f"adding routers")
+            await self.include_routers()
+
     @classmethod
     async def create(
         cls,
         server: FastAPI, 
         token_url: str,
+        admin_title: str = 'EasyAuth',
+        admin_prefix: str = '/admin',
         logger: logging.Logger = None,
         debug: bool = False,
         env_from_file: str = None,
@@ -134,6 +151,8 @@ class EasyAuthServer:
         auth_server = cls(
             server,
             token_url,
+            admin_title,
+            admin_prefix,
             logger,
             debug,
             env_from_file,
@@ -189,6 +208,16 @@ class EasyAuthServer:
             with open(f"{os.environ['KEY_PATH']}/{os.environ['KEY_NAME']}.pub", 'w') as pb:
                 pb.write(key.export_private())
 
+    async def include_routers(self):
+        for auth_api_router in self.api_routers:
+            self.server.include_router(auth_api_router.server)
+
+    def create_api_router(self, *args, **kwargs):
+        api_router = EasyAuthAPIRouter.create(self, *args, **kwargs)
+        self.api_routers.append(
+            api_router
+        )
+        return api_router
     def email_setup(self):
         self.email_conf = ConnectionConfig(**{
             "MAIL_USERNAME": os.environ['MAIL_USERNAME'],

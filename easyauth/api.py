@@ -11,6 +11,9 @@ async def api_setup(server):
     class Token(BaseModel):
         access_token: str
         token_type: str
+    
+    api_router = server.api_routers[0]
+    admin_gui = server.api_routers[0]
 
     users_tb = server.auth_users
     groups_tb = server.auth_groups
@@ -34,7 +37,7 @@ async def api_setup(server):
             # raise group does not exist
             raise HTTPException(status_code=404, detail=f"no action with name {action} exists, create first")
     
-    @server.get('/auth/export', tags=['Config'])
+    @api_router.get('/auth/export', tags=['Config'])
     async def export_auth_config():
         return {
             'users': await users_tb.select('*'),
@@ -50,7 +53,7 @@ async def api_setup(server):
         actions: Optional[List[Permission]]
 
 
-    @server.post('/auth/import', tags=['Config'])
+    @api_router.post('/auth/import', tags=['Config'])
     async def import_auth_config(config: Config):
         config = dict(config)
         if 'actions' in config:
@@ -113,7 +116,7 @@ async def api_setup(server):
                 )
         return f"import_auth_config - completed"
 
-    @server.get('/auth/serviceaccount/token/{service}', response_model=Token, tags=['Token'])
+    @api_router.get('/auth/serviceaccount/token/{service}', response_model=Token, tags=['Token'])
     async def get_service_account_token(service: str):
         service_user = await users_tb[service]
         if service_user is None:
@@ -231,7 +234,8 @@ async def api_setup(server):
 
         # add token to cookie
         response.set_cookie('token', token)
-        redirect_ref = '/'
+        
+        redirect_ref = server.ADMIN_PREFIX
 
         if 'ref' in request.cookies:
             redirect_ref = request.cookies['ref']
@@ -252,7 +256,7 @@ async def api_setup(server):
         response.set_cookie('token', 'INVALID')
         return RedirectResponse('/login/re', headers=response.headers)
 
-    @server.put('/auth/user', status_code=201, tags=['Users'])
+    @api_router.put('/auth/user', status_code=201, tags=['Users'])
     async def create_user(user: User):
         user = dict(user)
 
@@ -274,7 +278,7 @@ async def api_setup(server):
         # trigger some activation email later?
         return f"{user['username']} created"
         
-    @server.put('/auth/service', status_code=201, actions=['CREATE_USER'], tags=['Users'])
+    @api_router.put('/auth/service', status_code=201, actions=['CREATE_USER'], tags=['Users'])
     async def create_service(service: Service):
         service = dict(service)
 
@@ -304,7 +308,7 @@ async def api_setup(server):
         email: Optional[str]
         groups: Optional[Union[list, UserGroup]]
 
-    @server.post('/auth/user/{username}', tags=['Users'])
+    @api_router.post('/auth/user/{username}', tags=['Users'])
     async def update_user(
         username: str,
         update: UserUpdate
@@ -338,17 +342,17 @@ async def api_setup(server):
         )
         return f"{username} updated"
 
-    @server.delete('/auth/user', tags=['Users'])
+    @api_router.delete('/auth/user', tags=['Users'])
     async def delete_user(username: str):
         await verify_user(username)
         await users_tb.delete(where={'username': username})
         return f"{username} deleted"
 
-    @server.get('/auth/users', tags=['Users'])
+    @api_router.get('/auth/users', tags=['Users'])
     async def get_all_users():
         return await users_tb.select('*')
 
-    @server.get('/auth/users/{username}', tags=['Users'])
+    @api_router.get('/auth/users/{username}', tags=['Users'])
     async def get_user(username: str):
         return await get_user_details(username)
 
@@ -364,7 +368,7 @@ async def api_setup(server):
 
     # Groups
 
-    @server.put('/auth/group', status_code=201, tags=['Groups'])
+    @api_router.put('/auth/group', status_code=201, tags=['Groups'])
     async def create_group(group: Group):
         group = dict(group)
     
@@ -384,7 +388,7 @@ async def api_setup(server):
     class UpdateRoles(BaseModel):
         roles: list
 
-    @server.post('/auth/group/{group}', status_code=201, tags=['Groups'])
+    @api_router.post('/auth/group/{group}', status_code=201, tags=['Groups'])
     async def update_group(group: str, roles: UpdateRoles):
         roles = dict(roles)
         await verify_group(group)
@@ -396,17 +400,17 @@ async def api_setup(server):
         )
         return f"existing group updated"
         
-    @server.delete('/auth/group', tags=['Groups'])
+    @api_router.delete('/auth/group', tags=['Groups'])
     async def delete_group(group_name: str):
         await verify_group(group_name)
         await groups_tb.delete(where={'group_name': group_name})
         return f"{group_name} deleted"
 
-    @server.get('/auth/groups', tags=['Groups'])
+    @api_router.get('/auth/groups', tags=['Groups'])
     async def get_all_groups():
         return await groups_tb.select('*')
 
-    @server.get('/auth/groups/{group}', tags=['Groups'])
+    @api_router.get('/auth/groups/{group}', tags=['Groups'])
     async def get_group(group_name: str):
         await verify_group(group_name)
         group = await groups_tb[group_name]
@@ -414,7 +418,7 @@ async def api_setup(server):
 
     # Roles
 
-    @server.put('/auth/role', status_code=201, tags=['Roles'])
+    @api_router.put('/auth/role', status_code=201, tags=['Roles'])
     async def create_role(role: Role):
         role = dict(role)
 
@@ -434,7 +438,7 @@ async def api_setup(server):
     class UpdateActions(BaseModel):
         actions: list
 
-    @server.post('/auth/role/{role}', status_code=201, tags=['Roles'])
+    @api_router.post('/auth/role/{role}', status_code=201, tags=['Roles'])
     async def update_role(role: str, actions: UpdateActions):
         actions = dict(actions)
         await verify_role(role)
@@ -447,17 +451,17 @@ async def api_setup(server):
         )
         return f"existing role updated"
 
-    @server.delete('/auth/role', tags=['Roles'])
+    @api_router.delete('/auth/role', tags=['Roles'])
     async def delete_role(role: str):
         await verify_role(role)
         await roles_tb.delete(where={'role': role})
         return f"{role} deleted"
 
-    @server.get('/auth/roles', tags=['Roles'])
+    @api_router.get('/auth/roles', tags=['Roles'])
     async def get_all_roles():
         return await roles_tb.select('*')
 
-    @server.get('/auth/roles/{role}', tags=['Roles'])
+    @api_router.get('/auth/roles/{role}', tags=['Roles'])
     async def get_role(role: str):
         await verify_role(role)
         role = await roles_tb[role]
@@ -465,7 +469,7 @@ async def api_setup(server):
 
     ## Permissions 
 
-    @server.put('/auth/permissions', status_code=201, tags=['Actions'])
+    @api_router.put('/auth/permissions', status_code=201, tags=['Actions'])
     async def create_permission(permission: Permission):
         permission = dict(permission)
         if not await permissions_tb[permission['action']] is None:
@@ -477,7 +481,7 @@ async def api_setup(server):
     class UpdateDetails(BaseModel):
         detail: str
 
-    @server.post('/auth/permissions', status_code=201, tags=['Actions'])
+    @api_router.post('/auth/permissions', status_code=201, tags=['Actions'])
     async def update_permission(action: str, detail: UpdateDetails):
         detail = dict(detail)
         await verify_action(action)
@@ -487,17 +491,17 @@ async def api_setup(server):
         )
         return f"existing permission updated"
 
-    @server.delete('/auth/permission', tags=['Actions'])
+    @api_router.delete('/auth/permission', tags=['Actions'])
     async def delete_permission(action):
         await verify_action(action)
         await permissions_tb.delete(where={'action': action})
         return f"{action} deleted"
 
-    @server.get('/auth/permissions', tags=['Actions'])
+    @api_router.get('/auth/permissions', tags=['Actions'])
     async def get_all_permissons():
         return await permissions_tb.select('*')
 
-    @server.get('/auth/permission/{action}', tags=['Actions'])
+    @api_router.get('/auth/permission/{action}', tags=['Actions'])
     async def get_permission(action: str):
         await verify_action(action)
         permission = await permissions_tb[action]
