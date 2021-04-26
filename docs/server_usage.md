@@ -34,7 +34,9 @@ async def startup():
     server.auth = await EasyAuthServer.create(
         server, 
         '/auth/token',
-        env_from_file='server_env.json'
+        admin_title='EasyAuth',
+        admin_prefix='/admin2',
+        env_from_file='server_sqlite.json'
     )
 
 ``` 
@@ -67,6 +69,79 @@ test_key.key  test_key.pub
 
     If a .key is re-created, the new .pub key must be copied to all EasyAuthClients
 
+### APIRouter
+FastAPI provides an [APIRouter](https://fastapi.tiangolo.com/tutorial/bigger-applications/?h=apirouter#apirouter) object for defining path prefixes, pre-defined dependencies, see fastapi docs for more details. EasyAuthServer can extend the main FastAPI router using the <b>.create_api_router()</b> method. 
+
+!!! Important - "APIRouter Considerations "
+    APIRouter's must be created and distributed at runtime, instead of just imported & included.
+
+```python
+from fastapi import FastAPI
+
+from easyauth.server import EasyAuthServer
+
+server = FastAPI()
+
+@server.on_event('startup')
+async def startup():
+    server.auth = await EasyAuthServer.create(
+        server, 
+        '/auth/token',
+        admin_title='EasyAuth - Company',
+        admin_prefix='/admin',
+        env_from_file='server_sqlite.json'
+    )
+
+    finance_auth_router = server.auth.create_api_router(prefix='/finance', tags=['finance'])
+    hr_auth_router = server.auth.create_api_router(prefix='/hr', tags=['hr'])
+    marketing_auth_router = server.auth.create_api_router(prefix='/marketing', tags=['marketing'])
+
+    # import sub modules
+    from .finance import finance
+    from .hr import hr
+    from .marketing import marketing
+
+    # send auth routers to setup of each sub-module
+    await finance.setup(finance_auth_router)
+    await hr.setup(hr_auth_router)
+    await marketing.setup(marketing_auth_router)
+```
+
+```python
+#finance/finance.py
+# finance setup
+async def setup(router):
+
+    @router.get('/')
+    async def finance_root():
+        return f"fiance_root"
+    
+    @router.get('/data')
+    async def finance_data():
+        return f"finance_data"
+
+```
+!!! TIP
+    server.auth.create_api_router() is a wrapper around FastAPI's APIRouter, accepting and passing the same arguments, but also automatically including the router at startup.
+
+```
+.
+├── app
+│   ├── __init__.py
+│   ├── server.py
+│   └── marketing
+│   │   ├── __init__.py
+│   │   ├── marketing.py
+│   └── finance
+│   │   ├── __init__.py
+│   │   ├── finance.py
+│   └── hr
+│       ├── __init__.py
+│       └── hr.py
+```
+
+![](images/easyauthclient-apirouter.png)
+
 ### API
 
 This new admin user is required to access the APIs pre-created at
@@ -80,6 +155,11 @@ INFO:     Uvicorn running on http://0.0.0.0:8330 (Press CTRL+C to quit)
 ![](images/api.png)
 
 ### GUI
+The EasyAuth Admin GUI is accessible by accessing the listening host:port at the defined <b>admin_prefix</b> location.
+!!! INFO "GUI URL"
+    http://0.0.0.0/{admin_prefix} <br>
+    http://0.0.0.0/admin
+
 ![](images/EasyAuthGUI.png)
 
 ### Docker 
