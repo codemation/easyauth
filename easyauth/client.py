@@ -1,4 +1,4 @@
-import os
+import os, uuid
 import jwcrypto.jwk as jwk
 import python_jwt as jwt
 import jwt as pyjwt
@@ -6,6 +6,7 @@ import datetime
 import json
 import logging
 import asyncio
+from typing import Any
 from starlette.status import HTTP_302_FOUND
 from fastapi import FastAPI, Depends, HTTPException, Form, Response, Request
 from fastapi.security import OAuth2PasswordBearer
@@ -14,18 +15,20 @@ from makefun import wraps
 from inspect import signature, Parameter
 from easyadmin import Admin
 from aiohttp import ClientSession
-
 from easyauth.router import EasyAuthAPIRouter
+from easyrpc.server import EasyRpcServer
+from easyrpc.proxy import EasyRpcProxy
 
 
 class EasyAuthClient:
-    def __init__(
-        self, 
-        server: FastAPI, 
+    def __init__(self,
+        server: FastAPI,
+        rpc_server: EasyRpcServer,
         token_url: str,
+        public_key: str,
         logger: logging.Logger = None,
-        debug: bool = False,
         env_from_file: str = None,
+        debug: bool = False,
         default_permission: dict = {'groups': ['administrators']}
     ):
         self.server = server
@@ -34,6 +37,9 @@ class EasyAuthClient:
 
         self.admin = Admin('EasyAuthClient', side_bar_sections=[])
         self.token_url = token_url
+        self._public_key = jwk.JWK.from_json(public_key)
+
+        self.rpc_server = rpc_server
 
         # extra routers
         self.api_routers = []
@@ -47,29 +53,93 @@ class EasyAuthClient:
         if env_from_file:
             self.load_env_from_file(env_from_file)
 
-        # env variable checks # 
-        assert 'KEY_PATH' in os.environ, f"missing KEY_PATH env variable"
-        assert 'KEY_NAME' in os.environ, f"missing KEY_NAME env variable"
+        # env variable checks #
+        #assert 'KEY_PATH' in os.environ, f"missing KEY_PATH env variable"
+        #assert 'KEY_NAME' in os.environ, f"missing KEY_NAME env variable"
 
     @classmethod
-    async def create(
-        cls,
-        server: FastAPI, 
-        token_url: str,
+    async def create( cls,
+        server: FastAPI,
+        token_url: str = None,
+        token_server: str = None,
+        token_server_port: int = None,
+        auth_secret: str = None,
         logger: logging.Logger = None,
         debug: bool = False,
         env_from_file: str = None,
         default_permissions: str = {'groups': ['administrators']},
         default_login_redirect: str = '/'
     ):
+        for arg in {auth_secret}:
+            assert not auth_secret is None, f"Expected value for 'auth_secret'"
+
+        # TODO - Depricate token_url usage in later releases
+        # TODO - Depricate env_from_file usage - accepts now, but has no effect
+
+        # disect token URL, extract host:port
+        if token_url:
+            token_server, token_server_port = token_url.split('/')[2].split(':')
+
+        rpc_server = EasyRpcServer(
+            server, 
+            '/ws/easyauth',
+            server_secret=auth_secret
+        )
+
+        await rpc_server.create_server_proxy(
+            token_server, 
+            token_server_port, 
+            '/ws/easyauth', 
+            server_secret=auth_secret, 
+            namespace='global_store'
+        )
+
+        await rpc_server.create_server_proxy(
+            token_server, 
+            token_server_port, 
+            '/ws/easyauth', 
+            server_secret=auth_secret, 
+            namespace='easyauth'
+        )
+
+        setup_info = await rpc_server['easyauth']['get_setup_info']()
+
         auth_server = cls(
             server,
-            token_url,
+            rpc_server,
+            f"http://{token_server}:{token_server_port}{setup_info['token_url']}",
+            setup_info['public_rsa'],
             logger,
             debug,
             env_from_file,
             default_permissions
         )
+        await asyncio.sleep(5)
+
+        auth_server.store = await rpc_server['global_store']['get_store_data']()
+
+        async def store_data(action: str, store: str, key: str, value: Any = None):
+            """
+            actions:
+                - put|update|delete
+            """
+            auth_server.log.debug(f"store_data action: {action} - store: {store} - key: {key} - value: {value}")
+            if not store in auth_server.store:
+                auth_server.store[store] = {}
+            if action in {'update', 'put'}:
+                auth_server.store[store][key] = value
+            else:
+                if key in auth_server.store[store]:
+                    del auth_server.store[store][key]
+            
+            return f"{action} in {store} with {key} completed"
+
+        store_data.__name__ = store_data.__name__ + '_'.join(
+            str(uuid.uuid4()).split('-')
+        )
+
+        rpc_server.origin(store_data, namespace='global_store')
+
         @server.get('/login', response_class=HTMLResponse, include_in_schema=False)
         async def login(request: Request, response: Response):
             return auth_server.get_login_page("Login to Begin")
@@ -91,21 +161,14 @@ class EasyAuthClient:
             password: str = Form(...),
         ):
             token = None
-            async with ClientSession() as client:
-                token = await client.post(
-                    auth_server.token_url+'/login',
-                    json={'username': username, 'password': password}
-                )
-                token_results = await token.json()
-                if not token.status == 200:
-                    return HTMLResponse(
-                        auth_server.get_login_page(
-                            token_results['detail']
-                        ),
-                        status_code=token.status
-                    )
-                response.set_cookie('token', token_results['access_token'])
-                response.status_code=200
+            token = await auth_server.rpc_server['easyauth']['generate_auth_token'](
+                username, password
+            )
+            if not 'access_token' in token:
+                message = 'invalid username / password' if 'invalid username / password' in token else token
+                return auth_server.get_login_page(message)
+            response.set_cookie('token', token['access_token'])
+            response.status_code=200
             
             redirect_ref = default_login_redirect
             if 'ref' in request.cookies:
@@ -214,12 +277,12 @@ class EasyAuthClient:
     
 
     def decode_token(self, token):
-        with open(f"{os.environ['KEY_PATH']}/{os.environ['KEY_NAME']}.pub", 'r') as pb_key:
-            return jwt.verify_jwt(
-                token, 
-                jwk.JWK.from_json(pb_key.readline()), 
-                ['RS256']
-            )
+        #with open(f"{os.environ['KEY_PATH']}/{os.environ['KEY_NAME']}.pub", 'r') as pb_key:
+        return jwt.verify_jwt(
+            token, 
+            self._public_key, 
+            ['RS256']
+        )
 
     def router(self, path, method, permissions: list, send_token: bool = False, *args, **kwargs):
         response_class = kwargs.get('response_class')
@@ -315,6 +378,13 @@ class EasyAuthClient:
                         if value in token['permissions'][auth_type]:
                             allowed = True
                             break
+
+                if not token['token_id'] in self.store['tokens']:
+                    self.log.error(
+                        f"token for user {token['permissions']['users'][0]} - {token['token_id']} is unknown / revoked {self.store['tokens']}"
+                    )
+                    allowed = False
+
                 if not allowed:
                     if response_class is HTMLResponse or 'text/html' in request.headers['accept']:
                         response = HTMLResponse(

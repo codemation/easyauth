@@ -17,27 +17,43 @@ async def frontend_setup(server):
             {
                 'items': [
                     {
-                        'name':  'USERS',
+                        'name':  'Users',
                         'href': f'{admin_prefix}/users',
                         'icon': 'user',
                         'items': []
                     },
                     {
-                        'name':  'GROUPS',
+                        'name':  'Services',
+                        'href': f'{admin_prefix}/services',
+                        'icon': 'robot',
+                        'items': []
+                    },
+                    {
+                        'name':  'Groups',
                         'href': f'{admin_prefix}/groups',
                         'icon': 'users',
                         'items': []
                     },
                     {
-                        'name':  'ROLES',
+                        'name':  'Roles',
                         'href': f'{admin_prefix}/roles',
                         'icon': 'bezier-curve',
                         'items': []
                     },
                     {
-                        'name':  'ACTIONS',
+                        'name':  'Actions',
                         'href': f'{admin_prefix}/actions',
                         'icon': 'id-badge',
+                        'items': []
+                    }
+                ]
+            },
+            {
+                'items': [
+                    {
+                        'name':  'Tokens Issued',
+                        'href': f'{admin_prefix}/tokens',
+                        'icon': 'key',
                         'items': []
                     }
                 ]
@@ -73,6 +89,10 @@ async def frontend_setup(server):
     async def admin_users(access_token=None):
         return await _admin_users(access_token)
     
+    @admin_gui.get('/services', response_class=HTMLResponse, send_token=True, include_in_schema=False)
+    async def admin_users(access_token=None):
+        return await _admin_users(access_token, account_type='service')
+
     @admin_gui.get('/user/{username}', response_class=HTMLResponse, send_token=True, include_in_schema=False)
     async def admin_user_page(username: str, access_token: str = None):
         users = await server.auth_users.select(
@@ -96,6 +116,30 @@ async def frontend_setup(server):
         )
         return user_page
 
+    @admin_gui.get('/service/{username}', response_class=HTMLResponse, send_token=True, include_in_schema=False)
+    async def admin_service_page(username: str, access_token: str = None):
+        users = await server.auth_users.select(
+            'username', where={'username': username}
+        )
+        if not users:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No Service with name {username} exists"
+            )
+            
+        groups = await server.auth_groups.select('group_name')
+        groups = deepcopy([group['group_name'] for group in groups])
+
+        user_page = admin.get_admin_page(
+            name=username, 
+            sidebar=server.admin.sidebar,
+            body=await get_user_details(username, groups),
+            current_user=access_token['permissions']['users'][0],
+            modals=logout_modal
+        )
+        return user_page
+
+
     async def get_user_details(username: str, all_groups: list):
 
         details = await server.get_user_details(username)
@@ -104,9 +148,11 @@ async def frontend_setup(server):
             f'Update {username}',
             [
                 html_input.get_text_input("username", value=username),
-                html_input.get_text_input("password", input_type='password'),
+                html_input.get_text_input("password", input_type='password') 
+                if details['account_type'] == 'user' else '',
                 html_input.get_text_input("email", value=details['email']) + 
-                html_input.get_text_input("full_name", value=details['full_name']),
+                html_input.get_text_input("full_name", value=details['full_name'])
+                if details['account_type'] == 'user' else '',
                 html_input.get_checkbox('groups', [
                     (group, True) for group in details['groups']['groups'] ] +
                     [(group, False) for group in all_groups if not group in details['groups']['groups']]
@@ -167,9 +213,10 @@ async def frontend_setup(server):
         return modal_row
 
     
-    async def _admin_users(access_token: str):
+    async def _admin_users(access_token: str, account_type='user'):
         users = await server.auth_users.select(
-            'username', 'full_name', 'email', 'account_type', 'groups'
+            'username', 'full_name', 'email', 'account_type', 'groups',
+            where={'account_type': account_type}
         )
         users = users.copy()
         
@@ -186,14 +233,14 @@ async def frontend_setup(server):
                     f'delete{username}Modal',
                     alert='',
                     body=forms.get_form(
-                        f'Delete User {username}',
+                        f'Delete {account_type} {username}',
                         [
                             buttons.get_button(
                                 'Go Back',
                                 color='success', 
                                 href=f'{admin_prefix}/'
                         )],
-                        submit_name='delete user',
+                        submit_name=f'delete {account_type}',
                         method='delete',
                         action=f'/auth/user?username={username}'
                     ),
@@ -209,11 +256,31 @@ async def frontend_setup(server):
                     footer='',
                     size='lg'
             ))
+            if account_type == 'service':
+                modals.append(
+                    modal.get_modal(
+                        f'generate{username}TokenModal',
+                        alert='',
+                        body=forms.get_form(
+                            f'Generate {username} token',
+                            [
+                                buttons.get_button(
+                                    'Go Back',
+                                    color='success', 
+                                    href=f'{admin_prefix}/'
+                            )],
+                            submit_name=f'Create Token',
+                            method='get',
+                            action=f'/auth/serviceaccount/token/{username}'
+                        ),
+                        footer='',
+                        size='sm'
+                    )
+                )
             users_table[ind]['groups'] = ''.join([
                 buttons.get_button(group, color='success', href=f'{admin_prefix}/group/{group}')
                 for group in users_table[ind]['groups']['groups']
             ])
-
             actions = ( 
                     buttons.get_split_button(
                         f'view/edit',
@@ -227,25 +294,40 @@ async def frontend_setup(server):
                         icon='trash'
                     )
                 )
+            if account_type == 'service':
+                token_button = buttons.get_split_button(
+                        f'generate token', 
+                        modal=f'generate{username}TokenModal', 
+                        color='warning',
+                        icon='key'
+                    )
+                actions = actions + token_button
             users_table[ind][' '] = actions
 
+        email_and_full_name_input = html_input.get_text_input("email") + html_input.get_text_input("full_name")
+        
+        users_default = [{
+            f'{account_type}': f"No {account_type}'s created yet",
+        }]
+
         return server.admin.table_page(
-            'Users',
-            users_table,
+            f'{account_type}s',
+            users_table if len(users_table) > 0 else users_default,
             current_user=access_token['permissions']['users'][0],
             modals=''.join(modals),
             above="",
             below=forms.get_form(
-                'Create User',
+                f'Create {account_type}',
                 [
-                    html_input.get_text_input("username") +
-                    html_input.get_text_input("password", input_type='password'),
-                    html_input.get_text_input("email") + html_input.get_text_input("full_name"),
+                    html_input.get_text_input("username"),
+                    html_input.get_text_input("password", input_type='password')
+                    if account_type =='user' else '',
+                    email_and_full_name_input if account_type =='user' else '' ,
                     html_input.get_checkbox('groups', [(group, False) for group in deepcopy(groups)])
                 ],
-                submit_name='create user',
+                submit_name=f'create {account_type}',
                 method='put',
-                action='/auth/user'
+                action=f'/auth/{account_type}'
             )
         )
 
@@ -822,6 +904,143 @@ async def frontend_setup(server):
                 action='/auth/permissions'
             )
         )
+    
+
+    def get_token_details(token: dict):
+        users = token['users']
+        groups = token['groups']
+        roles = token['roles']
+        actions = token['actions']
+
+        modal_row = card.get_card(
+            f"{users[0]} Token Permissions",
+            body = row.get_row(
+                card.get_card(
+                    f"Users",
+                    ''.join([
+                        buttons.get_button(
+                            user,
+                            color='success', 
+                            href=f'{admin_prefix}/user/{user}'
+                        ) for user in users
+                    ]),
+                    size=4
+                )+
+                card.get_card(
+                    f"Groups",
+                    ''.join([
+                        buttons.get_button(
+                            group,
+                            color='success', 
+                            href=f'{admin_prefix}/group/{group}'
+                        ) for group in groups
+                    ]),
+                    size=4
+                )+
+                card.get_card(
+                    f"Roles",
+                    ''.join([
+                        buttons.get_button(
+                            role,
+                            color='success', 
+                            href=f'{admin_prefix}/role/{role}'
+                        ) for role in roles
+                    ]),
+                    size=4
+                )+
+                card.get_card(
+                    f"Actions",
+                    ''.join([
+                        buttons.get_button(
+                            action,
+                            color='success', 
+                            href=f'{admin_prefix}/action/{action}'
+                        ) for action in actions
+                    ]),
+                    size=4
+                )
+            ),
+            size=12
+        )
+        return modal_row
+    
+    @admin_gui.get('/tokens', response_class=HTMLResponse, send_token=True, include_in_schema=False)
+    async def admin_tokens(access_token=None):
+        tokens_raw = await server.auth_tokens.select('*')
+        DO_NOT_DISPLAY = {'token_id', 'token'}
+
+        tokens = []
+        for ind, token in enumerate(tokens_raw):
+            tk = {'number': ind}
+            for k,v in token.items():
+                if k in DO_NOT_DISPLAY:
+                    continue
+                tk[k] = v
+            tokens.append(tk)
+                
+    
+        modals = [logout_modal]
+        token_index = {}
+        for token in tokens:
+            token_number = token['number']
+            token_id = tokens_raw[token_number]['token_id']
+            token_user = token['username']
+            modals.append(modal.get_modal(
+                    f'revoke{token_number}Modal',
+                    alert='',
+                    body=forms.get_form(
+                        f"Revoke Token {token_number} for {token_user}",
+                        [
+                            buttons.get_button(
+                                'Go Back',
+                                color='success', 
+                                href=f'{admin_prefix}/tokens'
+                        )],
+                        submit_name='revoke token',
+                        method='delete',
+                        action=f'/auth/token?token_id={token_id}'
+                    ),
+                    footer='',
+                    size='sm'
+                )
+            )
+            token_details = tokens_raw[token_number]['token']
+            modals.append(modal.get_modal(
+                f'view_{token_number}',
+                alert='',
+                body=get_token_details(token_details),
+                footer='',
+                size='lg'
+            ))
+            actions = ( 
+                buttons.get_split_button(
+                    f'view',
+                    icon='eye',
+                    modal=f'view_{token_number}'
+                ) + 
+                buttons.get_split_button(
+                    f'revoke', 
+                    modal=f'revoke{token_number}Modal', 
+                    color='danger',
+                    icon='trash'
+                )
+            )
+            token[' '] = actions
+        return server.admin.table_page(
+            'Tokens',
+            tokens if len(tokens) > 0 else [
+                {
+                    'username': 'NO USER ISSUED TOKENS', 
+                    'issued': '',
+                    'expiration': ''
+                }
+            ],
+            current_user=access_token['permissions']['users'][0],
+            modals=''.join(modals),
+            above="",
+            below=''
+        )
+
     
     @server.server.get('/login', response_class=HTMLResponse, tags=['Login'])
     async def admin_login():
