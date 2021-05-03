@@ -1,15 +1,5 @@
 ## Client
 
-### Required Environment Varaibles
-Configure require env variables via a .json
-```Bash
-$ cat > client_env.json <<EOF
-{
-    "KEY_PATH": "/my_key-location",
-    "KEY_NAME": "test_key"
-}
-EOF
-```
 ### Client Usage
 
 ```python
@@ -23,9 +13,10 @@ server = FastAPI()
 @server.on_event('startup')
 async def startup():
     server.auth = await EasyAuthClient.create(
-        server, 
-        'http://0.0.0.0:8330/auth/token', # Should be a running EasyAuthServer 
-        env_from_file='client_env.json',
+        server,
+        token_server='0.0.0.0',
+        token_server_port=8090,
+        auth_secret='abcd1234',
         default_permissoins={'groups': ['users']}
     )
 
@@ -76,9 +67,11 @@ server = FastAPI(openapi_url="/groups/openapi.json")
 @server.on_event('startup')
 async def startup():
     server.auth = await EasyAuthClient.create(
-        server, 
-        'http://0.0.0.0:8220/auth/token', # Should be a running EasyAuthServer 
-        env_from_file='client_env.json'
+        server,
+        token_server='0.0.0.0',
+        token_server_port=8090,
+        auth_secret='abcd1234',
+        default_permissoins={'groups': ['users']}
     )
 
     finance_auth_router = server.auth.create_api_router(prefix='/finance', tags=['finance'])

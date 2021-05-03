@@ -1,4 +1,4 @@
-import os
+import os, uuid
 import bcrypt
 import jwcrypto.jwk as jwk
 import python_jwt as jwt
@@ -7,6 +7,8 @@ import datetime
 import json
 import logging
 import asyncio
+import subprocess
+from typing import Any
 from starlette.status import HTTP_302_FOUND
 from fastapi import FastAPI, Depends, HTTPException, Request, APIRouter
 from fastapi.security import OAuth2PasswordBearer
@@ -15,7 +17,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from makefun import wraps
 from inspect import signature, Parameter
 #from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
+from easyrpc.server import EasyRpcServer
 
+from easyauth.manager_proxy import manager_proxy
 from easyauth.db import database_setup
 from easyauth.models import tables_setup
 from easyauth.api import api_setup
@@ -27,6 +31,7 @@ class EasyAuthServer:
         self, 
         server: FastAPI,
         token_url: str,
+        rpc_server: EasyRpcServer,
         admin_title: str = 'EasyAuth',
         admin_prefix: str = '/admin',
         logger: logging.Logger = None,
@@ -40,17 +45,19 @@ class EasyAuthServer:
         self.oauth2_scheme = OAuth2PasswordBearer(tokenUrl=token_url) # /token
         self.DEFAULT_PERMISSION = default_permission
 
-        # extra routers
-        self.api_routers = []
-        self.create_api_router()                            # API Router
-        self.create_api_router(prefix=self.ADMIN_PREFIX)    # ADMIN GUI Router
-
+        self.rpc_server = rpc_server
 
         # logging setup # 
         self.log = logger
         self.debug = debug
         level = None if not self.debug else 'DEBUG'
         self.setup_logger(logger=self.log, level=level)
+
+
+        # extra routers
+        self.api_routers = []
+        self.create_api_router()                            # API Router
+        self.create_api_router(prefix=self.ADMIN_PREFIX)    # ADMIN GUI Router
 
         if env_from_file:
             self.load_env_from_file(env_from_file)
@@ -135,22 +142,38 @@ class EasyAuthServer:
         async def setup():
             self.log.warning(f"adding routers")
             await self.include_routers()
+        
+        @self.rpc_server.origin(namespace='admin')
+        async def login_stuff():
+            pass
 
     @classmethod
     async def create(
         cls,
         server: FastAPI, 
         token_url: str,
+        auth_secret: str,
         admin_title: str = 'EasyAuth',
         admin_prefix: str = '/admin',
         logger: logging.Logger = None,
+        db_proxy_port: int = 8091,
+        manager_proxy_port: int = 8092,
         debug: bool = False,
         env_from_file: str = None,
         default_permission: dict = {'groups': ['administrators']}
     ):
+
+
+        rpc_server = EasyRpcServer(
+            server, 
+            '/ws/easyauth',
+            server_secret=auth_secret
+        )
+
         auth_server = cls(
             server,
             token_url,
+            rpc_server,
             admin_title,
             admin_prefix,
             logger,
@@ -158,14 +181,112 @@ class EasyAuthServer:
             env_from_file,
             default_permission
         )
-        await database_setup(auth_server)
+        await database_setup(auth_server, db_proxy_port)
         await tables_setup(auth_server)
         await api_setup(auth_server)
         await frontend_setup(auth_server)
 
-        @server.on_event('shutdown')
-        async def db_close():
-            await auth_server.db.close()
+        # create manager_proxy.py in-place, used for centralizing manager communication
+        # and allowing forking of EasyAuthServer
+        with open('manager_proxy.py', 'w') as manager_proxy_file:
+            manager_proxy_file.write(manager_proxy)
+
+        if auth_server.leader:
+            # create subprocess for db_proxy
+            auth_server.log.warning(f"starting manager_proxy")
+            auth_server.manager = subprocess.Popen(
+                'gunicorn manager_proxy:server -w 1 -k uvicorn.workers.UvicornWorker -b 127.0.0.1:8092'.split(' ')
+            )
+            auth_server.log.warning(f"leader - waiting for members to start")
+            await asyncio.sleep(5)
+        else:
+            auth_server.log.warning(f"member - db setup complete - starting manager proxies")
+
+        async def client_update(action: str, store: str, key: str, value: Any):
+            """
+            update every connected client 
+            """
+            clients = auth_server.rpc_server['global_store']
+            for client in clients:
+                if client == 'get_store_data':
+                    continue
+                await clients[client](action, store, key, value)
+            return f"client_update completed"
+
+        client_update.__name__ = client_update.__name__ + '_'.join(
+            str(uuid.uuid4()).split('-')
+        )
+
+        # initialize global storage
+        auth_server.store = {'tokens': {}}
+
+        async def store_data(action: str, store: str, key: str, value: Any = None):
+            """
+            actions:
+                - put|update|delete
+            """
+            if not store in auth_server.store:
+                auth_server.store[store] = {}
+            if action in {'update', 'put'}:
+                auth_server.store[store][key] = value
+            else:
+                if key in auth_server.store[store]:
+                    del auth_server.store[store][key]
+            
+            return f"{action} in {store} with {key} completed"
+
+        store_data.__name__ = store_data.__name__ + '_'.join(
+            str(uuid.uuid4()).split('-')
+        )
+
+        rpc_server.origin(store_data, namespace='global_store')
+
+        @rpc_server.origin(namespace='global_store')
+        async def get_store_data():
+            rpc_server.get_all_registered_functions(namespace='global_store')
+            return auth_server.store
+
+        # register unique client_update in clients namespace
+        rpc_server.origin(client_update, namespace='clients')
+
+        # create connection to manager on 'manager' and 'clients' namespace
+        await rpc_server.create_server_proxy(
+            '127.0.0.1',
+            manager_proxy_port,
+            '/ws/manager',
+            server_secret=os.environ['RPC_SECRET'], 
+            namespace='clients'
+        )
+
+        await rpc_server.create_server_proxy(
+            '127.0.0.1',
+            manager_proxy_port,
+            '/ws/manager',
+            server_secret=os.environ['RPC_SECRET'], 
+            namespace='manager'
+        )
+
+        @rpc_server.origin(namespace='easyauth')
+        async def get_setup_info():
+            return {
+                'token_url': token_url,
+                'public_rsa': auth_server._privkey.export_public()
+            }
+
+        if auth_server.leader:
+            await asyncio.sleep(1)
+            valid_tokens = await auth_server.auth_tokens.select('token_id')
+            for token in valid_tokens:
+                await auth_server.global_store_update(
+                    'update',
+                    'tokens',
+                    token['token_id'],
+                    ''
+                )
+        else:
+            await asyncio.sleep(3)
+        
+        auth_server.log.warning(f"EasyAuthServer Started! - Loaded Tokens {auth_server.store['tokens']}")
 
         return auth_server
 
@@ -195,6 +316,7 @@ class EasyAuthServer:
 
         try:
             with open(f"{os.environ['KEY_PATH']}/{os.environ['KEY_NAME']}.key", 'r') as k:
+                self._privkey = jwk.JWK.from_json(k.readline())
                 pass
         except Exception:
             # create private / public keys
@@ -206,7 +328,7 @@ class EasyAuthServer:
                 pass
         except Exception:
             with open(f"{os.environ['KEY_PATH']}/{os.environ['KEY_NAME']}.pub", 'w') as pb:
-                pb.write(key.export_private())
+                pb.write(self._privkey.export_public())
 
     async def include_routers(self):
         for auth_api_router in self.api_routers:
@@ -252,29 +374,74 @@ class EasyAuthServer:
             allow_methods=["*"],
             allow_headers=["*"],
         )
-    def issue_token(self, permissions, minutes=60, hours=0, days=0):
+    async def global_store_update(self, action, store, key, value):
+        manager_methods = self.rpc_server['manager']
+        if 'global_store_update' in manager_methods:
+            self.log.warning(f"global_store_update - triggered")
+            await manager_methods['global_store_update'](action, store, key, value)
+            self.log.warning(f"global_store_update - finished")
+        return
+
+    async def revoke_token(self, token_id: str):
+        token = await self.auth_tokens.delete(
+            where={'token_id': token_id}
+        )
+        await self.global_store_update(
+            'delete',
+            'tokens',
+            key=token_id,
+            value=''
+        )
+
+    async def issue_token(self, permissions, minutes=60, hours=0, days=0):
+
+        token_id = str(uuid.uuid4())
 
         payload = {
             'iss': os.environ['ISSUER'], 
             'sub': os.environ['SUBJECT'], 
             'aud': os.environ['AUDIENCE'],
+            'token_id': token_id, 
             'permissions': permissions 
         }
-        with open(f"{os.environ['KEY_PATH']}/{os.environ['KEY_NAME']}.key", 'r') as key_path:
-            private_key = key_path.readline()
-            return jwt.generate_jwt(
-                payload, 
-                jwk.JWK.from_json(private_key), 
-                'RS256', 
-                datetime.timedelta(minutes=minutes, hours=hours, days=days)
-            )
+
+        expiration = datetime.datetime.now() + datetime.timedelta(
+                minutes=minutes, hours=hours, days=days
+        )
+
+        await self.auth_tokens.insert(
+            token_id=token_id,
+            username=permissions['users'][0],
+            issued=datetime.datetime.now().isoformat(),
+            expiration=expiration.isoformat(),
+            token=permissions
+        )
+
+        #with open(f"{os.environ['KEY_PATH']}/{os.environ['KEY_NAME']}.key", 'r') as key_path:
+        #    private_key = key_path.readline()
+        token = jwt.generate_jwt(
+            payload, 
+            self._privkey,
+            'RS256', 
+            datetime.timedelta(minutes=minutes, hours=hours, days=days)
+        )
+
+        await self.global_store_update(
+            'update',
+            'tokens',
+            key=token_id,
+            value=''
+        )
+
+        return token
+
     def decode_token(self, token):
-        with open(f"{os.environ['KEY_PATH']}/{os.environ['KEY_NAME']}.pub", 'r') as pb_key:
-            return jwt.verify_jwt(
-                token, 
-                jwk.JWK.from_json(pb_key.readline()), 
-                ['RS256']
-            )
+        #with open(f"{os.environ['KEY_PATH']}/{os.environ['KEY_NAME']}.pub", 'r') as pb_key:
+        return jwt.verify_jwt(
+            token, 
+            self._privkey, 
+            ['RS256']
+        )
     def encode(self, secret, **kw):
         try:
             return pyjwt.encode(kw, secret, algorithm='HS256')
@@ -443,7 +610,7 @@ class EasyAuthServer:
                     token = self.decode_token(token)[1]
                     self.log.debug(f"decoded token: {token}")
                 except Exception:
-                    self.log.exception(f"error decoding token")
+                    self.log.error(f"error decoding token")
                     if response_class is HTMLResponse:
                         response = HTMLResponse(
                             self.admin.login_page(
@@ -457,6 +624,7 @@ class EasyAuthServer:
                     raise HTTPException(status_code=401, detail=f"not authorized, invalid or expired")
 
                 allowed = False
+                
                 for auth_type, values in permissions.items():
                     if not auth_type in token['permissions']:
                         self.log.warning(f"{auth_type} is required")
@@ -465,6 +633,10 @@ class EasyAuthServer:
                         if value in token['permissions'][auth_type]:
                             allowed = True
                             break
+                if not token['id'] in self.store['tokens']:
+                    self.log.error(f"token for user {token['permissions']['user'][0]} used is unknown / revoked")
+                    allowed = False
+                
                 if not allowed:
                     if response_class is HTMLResponse:
                         response = HTMLResponse(

@@ -35,6 +35,7 @@ async def tables_setup(server):
     new_user = not 'users' in db.tables
 
     if 'users' in db.tables:
+        """
         if 'groups' in db.tables['users'].columns:
             log.warning(f"old user schema detected, creating backup & migrating")
             old_schema_user_copy = await db.tables['users'].select('*')
@@ -43,6 +44,7 @@ async def tables_setup(server):
             with open(f'users_backup_{time.time()}', 'w') as backup:
                 backup.write(json.dumps({'users_backup': old_schema_user_copy}))
             await db.remove_table('users')
+        """
     if 'groups' in db.tables:
         log.warning(f"old group schema detected, creating backup & migrating")
         old_schema_groups_copy = await db.tables['groups'].select('*')
@@ -52,16 +54,15 @@ async def tables_setup(server):
             backup.write(json.dumps({'groups_backup': old_schema_groups_copy}))
         await db.remove_table('groups')
 
-    
     await db.create_table(
         'users', 
         [
-            ('username', str, 'UNIQUE NOT NULL'),
-            ('full_name', str), 
-            ('email', str),
-            ('account_type', str), # user / service 
-            ('password', str),
-            ('user_groups', str),
+            ['username', 'str', 'UNIQUE NOT NULL'],
+            ['full_name', 'str'], 
+            ['email', 'str'],
+            ['account_type', 'str'], # user / service 
+            ['password', 'str'],
+            ['user_groups', 'str'],
         ],
         'username',
         cache_enabled=True
@@ -78,8 +79,8 @@ async def tables_setup(server):
     await db.create_table(
         'user_groups', 
             [
-            ('group_name', str, 'UNIQUE NOT NULL'), 
-            ('roles', str), 
+                ['group_name', 'str', 'UNIQUE NOT NULL'], 
+                ['roles', 'str'], 
             ],
             'group_name',
             cache_enabled=True
@@ -92,8 +93,8 @@ async def tables_setup(server):
     await db.create_table(
         'roles', 
         [
-            ('role', str, 'UNIQUE NOT NULL'), 
-            ('permissions', str)
+            ['role', 'str', 'UNIQUE NOT NULL'], 
+            ['permissions', 'str']
         ],
         'role',
         cache_enabled=True
@@ -102,8 +103,8 @@ async def tables_setup(server):
     await db.create_table(
         'permissions', 
             [
-                ('action', str, 'NOT NULL'),
-                ('details', str)
+                ['action', 'str', 'NOT NULL'],
+                ['details', 'str']
             ],
             'action',
             cache_enabled=True
@@ -137,7 +138,7 @@ async def tables_setup(server):
                 **kwargs
             )
         async def delete(self, where: dict):
-            if 'groups' in kwargs:
+            if 'groups' in where:
                 where['users_groups'] = where.pop('groups')
             return await server.db.tables['users'].delete(where=where)
         async def insert(self, **kwargs):
@@ -178,11 +179,32 @@ async def tables_setup(server):
         insert = server.db.tables['permissions'].insert
         def __getitem__(self, item):
             return server.db.tables['permissions'][item]
+    
+    await db.create_table(
+        'tokens', 
+            [
+                ['token_id', 'str'],
+                ['username', 'str'],
+                ['issued', 'str'],
+                ['expiration', 'str'],
+                ['token', 'str']
+            ],
+            'token_id',
+            cache_enabled=True
+    )
+    class Tokens:
+        select = server.db.tables['tokens'].select
+        update = server.db.tables['tokens'].update
+        delete = server.db.tables['tokens'].delete
+        insert = server.db.tables['tokens'].insert
+        def __getitem__(self, item):
+            return server.db.tables['tokens'][item]
 
     server.auth_users = Users()
     server.auth_groups = Groups()
     server.auth_roles = Roles()
     server.auth_actions = Actions()
+    server.auth_tokens = Tokens()
 
 
     if new_user:
@@ -212,3 +234,14 @@ async def tables_setup(server):
             action='CREATE_USER',
             details='DEFAULT privelidge for creating users'
         )
+
+    # setup env table - key-value store 
+    await db.create_table(
+        'env', 
+        [
+            ['key', 'str', 'UNIQUE NOT NULL'],
+            ['value', 'str']
+        ],
+        'key',
+        cache_enabled=True
+    )

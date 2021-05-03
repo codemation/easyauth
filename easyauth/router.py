@@ -12,6 +12,7 @@ class EasyAuthAPIRouter:
     ):
         self.parent = parent
         self.server = api_router
+        self.log = parent.log
     @classmethod
     def create(cls,
         parent, # EasyAuthClient
@@ -118,6 +119,12 @@ class EasyAuthAPIRouter:
                         if value in token['permissions'][auth_type]:
                             allowed = True
                             break
+                if not token['token_id'] in self.parent.store['tokens']:
+                    self.log.error(
+                        f"token for user {token['permissions']['users'][0]} - {token['token_id']} is unknown / revoked {self.parent.store['tokens']}"
+                    )
+                    allowed = False
+
                 if not allowed:
                     if response_class is HTMLResponse or 'text/html' in request.headers['accept']:
                         response = HTMLResponse(

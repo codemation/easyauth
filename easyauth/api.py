@@ -126,13 +126,19 @@ async def api_setup(server):
             raise HTTPException(status_code=400, detail=f"user {service} is not a service type account")
         permissions = await server.get_user_permissions(service)
 
-        token = server.issue_token(permissions, days=999)
+        token = await server.issue_token(permissions, days=999)
 
         server.log.warning(f"token generated: {type(token)}")
         return {
             "access_token": token, 
             "token_type": "bearer"
         }
+    @server.server.delete('/auth/token', tags=['Token'])
+    async def revoke_access_token(token_id: str):
+        await server.revoke_token(token_id)
+        return f"token revoked"
+
+
     @server.server.post('/auth/token/refresh', response_model=Token, tags=['Token'])
     async def refresh_access_token(token: str = Depends(server.oauth2_scheme)):
         try:
@@ -144,7 +150,7 @@ async def api_setup(server):
             permissions = await server.get_user_permissions(user_in_token)
 
             # generate RSA token
-            token = server.issue_token(permissions)
+            token = await server.issue_token(permissions)
             server.log.warning(f"token generated: {type(token)}")
             return {
                 "access_token": token, 
@@ -168,15 +174,21 @@ async def api_setup(server):
                 status_code=401, 
                 detail="unable to authenticate with provided credentials"
             )
+        return await generate_auth_token(username, password)
+
+    @server.rpc_server.origin(namespace='easyauth')
+    async def generate_auth_token(username: str, password: str):
+
         user = await server.validate_user_pw(username, password)
         if user:
             permissions = await server.get_user_permissions(user[0]['username'])
-            token = server.issue_token(permissions)
+            token = await server.issue_token(permissions)
             server.log.warning(f"token generated: {type(token)}")
             return {
                 "access_token": token, 
                 "token_type": "bearer"
             }
+        raise Exception(f"invalid username / password")
         raise HTTPException(
             detail=f"invalid username / password", status_code=401
         )
@@ -195,7 +207,7 @@ async def api_setup(server):
         permissions = await server.get_user_permissions(form_data.username)
 
         # generate RSA token
-        token = server.issue_token(permissions)
+        token = await server.issue_token(permissions)
         server.log.warning(f"token generated: {type(token)}")
         return {
             "access_token": token, 
@@ -229,12 +241,11 @@ async def api_setup(server):
 
         # get user permissions
         permissions = await server.get_user_permissions(username)
-
-        token = server.issue_token(permissions)
+        token = await server.issue_token(permissions)
 
         # add token to cookie
         response.set_cookie('token', token)
-        
+
         redirect_ref = server.ADMIN_PREFIX
 
         if 'ref' in request.cookies:
@@ -319,6 +330,8 @@ async def api_setup(server):
 
         to_update = {}
         for k, v in update.copy().items():
+            if v == '':
+                continue
             if k == 'groups':
                 if isinstance(v, list):
                     update[k] = {'groups': v}

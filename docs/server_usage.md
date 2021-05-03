@@ -4,7 +4,7 @@
 !!! TIP "Preparing Env Variables"
     Configure require env variables via a .json
 ```bash
-$ cat > server_env.json <<EOF
+$ cat > server_sqlite.json <<EOF
 {
     "DB_TYPE": "sqlite",
     "DB_NAME": "auth",
@@ -34,8 +34,9 @@ async def startup():
     server.auth = await EasyAuthServer.create(
         server, 
         '/auth/token',
-        admin_title='EasyAuth',
-        admin_prefix='/admin2',
+        auth_secret='abcd1234',
+        admin_title='EasyAuth - Company',
+        admin_prefix='/admin',
         env_from_file='server_sqlite.json'
     )
 
@@ -63,11 +64,11 @@ test_key.key  test_key.pub
 !!! Warning "Important .key file must be kept safe!"
     Do not store in the paths monitored by git to avoid accidental commit.
 
-    The .pub file should be copied to any separate apps which you want to use this EasyAuthServer.
+    The .pub file may be copied to separate apps which you want to may want to verify the validity of tokens on. 
+
+    EasyAuthClients will automatically pull the public key from the EasyAuthSever at startup.
 
     If either key is, ever lost, they will be re-created on the EasyAuthServer in the KEY_PATH location upon restart. 
-
-    If a .key is re-created, the new .pub key must be copied to all EasyAuthClients
 
 ### APIRouter
 FastAPI provides an [APIRouter](https://fastapi.tiangolo.com/tutorial/bigger-applications/?h=apirouter#apirouter) object for defining path prefixes, pre-defined dependencies, see fastapi docs for more details. EasyAuthServer can extend the main FastAPI router using the <b>.create_api_router()</b> method. 
@@ -87,6 +88,7 @@ async def startup():
     server.auth = await EasyAuthServer.create(
         server, 
         '/auth/token',
+        auth_secret='abcd1234',
         admin_title='EasyAuth - Company',
         admin_prefix='/admin',
         env_from_file='server_sqlite.json'
@@ -152,7 +154,7 @@ INFO:     Uvicorn running on http://0.0.0.0:8330 (Press CTRL+C to quit)
 ```
 !!! INFO
     Navigate to 0.0.0.0:8330/docs
-![](images/api.png)
+![](images/api/api.png)
 
 ### GUI
 The EasyAuth Admin GUI is accessible by accessing the listening host:port at the defined <b>admin_prefix</b> location.
@@ -160,7 +162,7 @@ The EasyAuth Admin GUI is accessible by accessing the listening host:port at the
     http://0.0.0.0/{admin_prefix} <br>
     http://0.0.0.0/admin
 
-![](images/EasyAuthGUI.png)
+![](images/admin_gui.png)
 
 ### Docker 
 
