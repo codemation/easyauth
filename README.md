@@ -57,7 +57,10 @@ async def startup():
     server.auth = await EasyAuthServer.create(
         server, 
         '/auth/token',
-        env_from_file='server_env.json'
+        auth_secret='abcd1234',
+        admin_title='EasyAuth - Company',
+        admin_prefix='/admin',
+        env_from_file='server_sqlite.json'
     )
 
 ```
@@ -68,15 +71,6 @@ $ uvicorn --host 0.0.0.0 --port 8330 test_server:server
 
 ## Basic Client
 
-Configure require env variables via a .json
-```Bash
-$ cat > client_env.json <<EOF
-{
-    "KEY_PATH": "/my_key-location",
-    "KEY_NAME": "test_key"
-}
-EOF
-```
 
 ```python
 #test_client.py
@@ -88,11 +82,14 @@ server = FastAPI()
 
 @server.on_event('startup')
 async def startup():
+@server.on_event('startup')
+async def startup():
     server.auth = await EasyAuthClient.create(
-        server, 
-        'http://0.0.0.0:8330/auth/token', # Should be a running EasyAuthServer 
-        env_from_file='client_env.json',
-        default_permissoins={'groups': ['users']}
+        server,
+        token_server='0.0.0.0',
+        token_server_port=8090,
+        auth_secret='abcd1234',
+        default_permissions={'groups': ['users']}
     )
 
     # grants access to users matching default_permissions
@@ -127,10 +124,10 @@ async def startup():
 ## Server 
 <h3>See 0.0.0.0:8330/docs </h3>
 
-![](docs/images/api.png)
+![](docs/images/api/api.png)
 
 ### GUI
-![](docs/images/EasyAuthGUI.png)
+![](docs/images/gui/admin_gui.png)
 
 ## Client
 
