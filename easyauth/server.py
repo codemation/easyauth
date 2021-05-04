@@ -320,9 +320,9 @@ class EasyAuthServer:
                 pass
         except Exception:
             # create private / public keys
-            key = jwk.JWK.generate(kty='RSA', size=2048)
+            self._privkey = jwk.JWK.generate(kty='RSA', size=2048)
             with open(f"{os.environ['KEY_PATH']}/{os.environ['KEY_NAME']}.key", 'w') as k:
-                k.write(key.export_private())
+                k.write(self._privkey.export_private())
         try:
             with open(f"{os.environ['KEY_PATH']}/{os.environ['KEY_NAME']}.pub", 'r') as k:
                 pass
