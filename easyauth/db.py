@@ -4,7 +4,6 @@ import subprocess
 from aiopyql import data
 from easyrpc.tools.database import EasyRpcProxyDatabase
 from easyauth.models import tables_setup
-from easyauth.db_proxy import db_proxy
 
 import random, string
 def get_random_string(length):
@@ -26,8 +25,8 @@ async def database_setup(server, db_proxy_port):
 
     # create db_proxy.py in-place, used for centralizing db access
     # and allowing forking of EasyAuthServer
-    with open('db_proxy.py', 'w') as proxy:
-        proxy.write(db_proxy)
+    #with open('db_proxy.py', 'w') as proxy:
+    #    proxy.write(db_proxy)
 
     assert 'DB_TYPE' in os.environ, f"missing required DB_TYPE env variable"
     assert 'DB_NAME' in os.environ, f"missing required DB_NAME env variable"
@@ -93,9 +92,10 @@ async def database_setup(server, db_proxy_port):
 
         os.environ['RPC_SECRET'] = RPC_SECRET
         await asyncio.sleep(0.3)
+
         # create subprocess for db_proxy
-        server.db_worker = subprocess.Popen(
-            f'gunicorn db_proxy:server -w 1 -k uvicorn.workers.UvicornWorker -b 127.0.0.1:{db_proxy_port}'.split(' ')
+        server.db_proxy = subprocess.Popen(
+            f"gunicorn easyauth.db_proxy:server -w 1 -k uvicorn.workers.UvicornWorker -b 127.0.0.1:{db_proxy_port}".split(' ')
         )
         await asyncio.sleep(3)
 

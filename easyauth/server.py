@@ -19,7 +19,6 @@ from inspect import signature, Parameter
 #from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
 from easyrpc.server import EasyRpcServer
 
-from easyauth.manager_proxy import manager_proxy
 from easyauth.db import database_setup
 from easyauth.models import tables_setup
 from easyauth.api import api_setup
@@ -35,6 +34,8 @@ class EasyAuthServer:
         admin_title: str = 'EasyAuth',
         admin_prefix: str = '/admin',
         logger: logging.Logger = None,
+        db_proxy_port: int = 8091,
+        manager_proxy_port: int = 8092,
         debug: bool = False,
         env_from_file: str = None,
         default_permission: dict = {'groups': ['administrators']}
@@ -74,6 +75,19 @@ class EasyAuthServer:
 
         # setup allowed origins - where can server receive token requests from
         self.cors_setup()
+    
+        @server.on_event('startup')
+        async def setup():
+            self.log.warning(f"adding routers")
+            await self.include_routers()
+
+        @server.on_event('shutdown')
+        async def shutdown_auth_server():
+            self.log.warning(f"EasyAuthServer - Starting shutdown process!")
+            if self.leader:
+                shutdown_proxies = f"for pid in $(ps aux | egrep '{db_proxy_port}|{manager_proxy_port}' | awk '{{print $2}}'); do kill $pid; done"
+                os.system(shutdown_proxies)
+            self.log.warning(f"EasyAuthServer - Finished shutdown process!")
 
         @server.middleware('http')
         async def detect_token_in_cookie(request, call_next):
@@ -133,16 +147,10 @@ class EasyAuthServer:
                     response.set_cookie('token', 'INVALID')
                     response.set_cookie('ref', request.__dict__['scope']['path'])
                     
-
             if response.status_code == 500:
                 log.error(f"Internal error - 500 - with request: {request.__dict__}")
             return response
 
-        @server.on_event('startup')
-        async def setup():
-            self.log.warning(f"adding routers")
-            await self.include_routers()
-        
         @self.rpc_server.origin(namespace='admin')
         async def login_stuff():
             pass
@@ -163,7 +171,6 @@ class EasyAuthServer:
         default_permission: dict = {'groups': ['administrators']}
     ):
 
-
         rpc_server = EasyRpcServer(
             server, 
             '/ws/easyauth',
@@ -177,25 +184,23 @@ class EasyAuthServer:
             admin_title,
             admin_prefix,
             logger,
+            db_proxy_port,
+            manager_proxy_port,
             debug,
             env_from_file,
             default_permission
         )
+
         await database_setup(auth_server, db_proxy_port)
         await tables_setup(auth_server)
         await api_setup(auth_server)
         await frontend_setup(auth_server)
 
-        # create manager_proxy.py in-place, used for centralizing manager communication
-        # and allowing forking of EasyAuthServer
-        with open('manager_proxy.py', 'w') as manager_proxy_file:
-            manager_proxy_file.write(manager_proxy)
-
         if auth_server.leader:
             # create subprocess for db_proxy
             auth_server.log.warning(f"starting manager_proxy")
-            auth_server.manager = subprocess.Popen(
-                'gunicorn manager_proxy:server -w 1 -k uvicorn.workers.UvicornWorker -b 127.0.0.1:8092'.split(' ')
+            auth_server.manager_proxy = subprocess.Popen(
+                f"gunicorn easyauth.manager_proxy:server -w 1 -k uvicorn.workers.UvicornWorker -b 127.0.0.1:8092".split(' ')
             )
             auth_server.log.warning(f"leader - waiting for members to start")
             await asyncio.sleep(5)
