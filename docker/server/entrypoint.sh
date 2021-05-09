@@ -1,7 +1,7 @@
 #!/bin/bash
 {
     gunicorn server:server \
-        -w 1 \
+        -w $AUTH_WORKERS \
         -k uvicorn.workers.UvicornWorker \
         -b 0.0.0.0:8220
 }

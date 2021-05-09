@@ -1,5 +1,1 @@
 easy-auth[server]
-gunicorn
-uvloop
-example
-httptools
