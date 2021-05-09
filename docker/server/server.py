@@ -23,6 +23,7 @@ async def startup():
     server.auth = await EasyAuthServer.create(
         server, 
         '/auth/token',
+        auth_secret=AUTH_SECRET,
         admin_title=ADMIN_TITLE,
         admin_prefix=ADMIN_PREFIX
     )
