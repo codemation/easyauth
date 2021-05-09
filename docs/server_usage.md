@@ -180,9 +180,13 @@ docker run --name easyauth \
     -e AUDIENCE=EasyAuthApis \
     -e KEY_PATH=/mnt/easyauth \
     -e KEY_NAME=test_key \
+    -e AUTH_SECRET=my-secret \
+    -e ADMIN_PREFIX="/admin" \
+    -e ADMIN_TITLE="EasyAuth - Example" \
+    -e AUTH_WORKERS=1 \
     -v $(pwd)/easyauth-vol:/mnt/easyauth \
     -p 8220:8220 \
-    -d joshjamison/easyauth:v0.0.0
+    -d joshjamison/easyauth:v0.0.1
 ```
 
 #### Pull Adminstrator Password from logs
