@@ -5,7 +5,6 @@ BASE_REQUIREMENTS = [
     'python-jwt==3.3.0', 'fastapi', 
     'uvicorn', 'python-multipart==0.0.5', 
     'easyadmin', 'easyrpc>=0.241',
-    
 ]
 SERVER_REQUIREMENTS = [
     'aiopyql>=0.357', 'cryptography', 

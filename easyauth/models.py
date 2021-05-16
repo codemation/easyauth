@@ -24,6 +24,21 @@ class Permission(BaseModel):
     action: str = "CREATE_USER|CREATE_GROUP"
     details: str = "Discription on what this allows"
 
+class EmailConfig(BaseModel):
+    MAIL_USERNAME: str
+    MAIL_PASSWORD: str
+    MAIL_FROM: str
+    MAIL_SERVER: str
+    MAIL_PORT: int
+    MAIL_FROM_NAME: str
+    MAIL_TLS: bool = True
+    MAIL_SSL: bool = False
+
+class Email(BaseModel):
+    subject: str
+    recipients: Union[list, str]
+    email_body: str
+    
 
 async def tables_setup(server):
     log = server.log
@@ -243,5 +258,24 @@ async def tables_setup(server):
             ['value', 'str']
         ],
         'key',
+        cache_enabled=True
+    )
+
+    # setup mail configuration
+
+    await db.create_table(
+        'email_config', 
+        [
+            ['username', 'str', 'UNIQUE NOT NULL'],
+            ['password', 'str'],
+            ['mail_from', 'str'],
+            ['mail_from_name', 'str'],
+            ['server', 'str'],
+            ['port', 'str'],
+            ['mail_tls', 'bool'],
+            ['mail_ssl', 'bool'],
+            ['is_enabled', 'bool']
+        ],
+        'username',
         cache_enabled=True
     )
