@@ -1,5 +1,6 @@
 from copy import deepcopy
 from easyadmin import Admin, buttons, forms, html_input, row, card, modal, admin
+from easyadmin.elements import scripts
 from fastapi.responses import HTMLResponse
 from fastapi import HTTPException
 
@@ -18,32 +19,37 @@ async def frontend_setup(server):
                 'items': [
                     {
                         'name':  'Users',
-                        'href': f'{admin_prefix}/users',
+                        'href': '#',#f'{admin_prefix}/users',
                         'icon': 'user',
+                        'onclick': f"OnClickUpdate('{admin_prefix}/users', 'page-top')",
                         'items': []
                     },
                     {
                         'name':  'Services',
-                        'href': f'{admin_prefix}/services',
+                        'href': '#',#f'{admin_prefix}/services',
                         'icon': 'robot',
+                        'onclick': f"OnClickUpdate('{admin_prefix}/services', 'page-top')",
                         'items': []
                     },
                     {
                         'name':  'Groups',
-                        'href': f'{admin_prefix}/groups',
+                        'href': '#',#f'{admin_prefix}/groups',
                         'icon': 'users',
+                        'onclick': f"OnClickUpdate('{admin_prefix}/groups', 'page-top')",
                         'items': []
                     },
                     {
                         'name':  'Roles',
-                        'href': f'{admin_prefix}/roles',
+                        'href': '#',#f'{admin_prefix}/roles',
                         'icon': 'bezier-curve',
+                        'onclick': f"OnClickUpdate('{admin_prefix}/roles', 'page-top')",
                         'items': []
                     },
                     {
                         'name':  'Actions',
-                        'href': f'{admin_prefix}/actions',
+                        'href': '#',#f'{admin_prefix}/actions',
                         'icon': 'id-badge',
+                        'onclick': f"OnClickUpdate('{admin_prefix}/actions', 'page-top')",
                         'items': []
                     }
                 ]
@@ -52,12 +58,25 @@ async def frontend_setup(server):
                 'items': [
                     {
                         'name':  'Tokens Issued',
-                        'href': f'{admin_prefix}/tokens',
+                        'href': '#',#f'{admin_prefix}/tokens',
                         'icon': 'key',
+                        'onclick': f"OnClickUpdate('{admin_prefix}/tokens', 'page-top')",
                         'items': []
                     }
                 ]
-            }
+            },
+            {
+                'items': [
+                    {
+                        'name':  'Email',
+                        'href': '#',#f'{admin_prefix}/email',
+                        'icon': 'envelope',
+                        'onclick': f"OnClickUpdate('{admin_prefix}/email', 'page-top')",
+                        'items': [
+                        ]
+                    }
+                ]
+            },
         ]
     )
 
@@ -160,7 +179,8 @@ async def frontend_setup(server):
             ],
             submit_name='update user',
             method='post',
-            action=f'/auth/user/{username}'
+            action=f'/auth/user/{username}',
+            transform_id=f'Update{username}',
         )
         groups, roles, actions = [], [], [] 
         if 'groups' in details['permissions']:
@@ -182,7 +202,8 @@ async def frontend_setup(server):
                     buttons.get_button(
                         group,
                         color='success', 
-                        href=f'{admin_prefix}/group/{group}'
+                        href=f'#{group}',
+                        onclick=f"OnClickUpdate('{admin_prefix}/group/{group}', 'page-top')"
                     ) for group in groups
                 ]),
                 size=4
@@ -193,7 +214,8 @@ async def frontend_setup(server):
                     buttons.get_button(
                         role,
                         color='success', 
-                        href=f'{admin_prefix}/role/{role}'
+                        href=f'#{role}',
+                        onclick=f"OnClickUpdate('{admin_prefix}/role/{role}', 'page-top')"
                     ) for role in roles
                 ]),
                 size=4
@@ -204,7 +226,8 @@ async def frontend_setup(server):
                     buttons.get_button(
                         action,
                         color='success', 
-                        href=f'{admin_prefix}/action/{action}'
+                        href=f'#{action}',
+                        onclick=f"OnClickUpdate('{admin_prefix}/action/{action}', 'page-top')"
                     ) for action in actions
                 ]),
                 size=4
@@ -315,7 +338,7 @@ async def frontend_setup(server):
             users_table if len(users_table) > 0 else users_default,
             current_user=access_token['permissions']['users'][0],
             modals=''.join(modals),
-            above="",
+            above=scripts.get_onclick_script(),
             below=forms.get_form(
                 f'Create {account_type}',
                 [
@@ -383,7 +406,8 @@ async def frontend_setup(server):
             ],
             submit_name='update group',
             method='post',
-            action=f'/auth/group/{group_name}'
+            action=f'/auth/group/{group_name}',
+            transform_id=f'Update{group_name}'
         )
 
         modal_row = row.get_row(
@@ -398,7 +422,8 @@ async def frontend_setup(server):
                     buttons.get_button(
                         user,
                         color='success', 
-                        href=f'{admin_prefix}/user/{user}'
+                        href=f'#{user}',
+                        onclick=f"OnClickUpdate('{admin_prefix}/user/{user}', 'page-top')"
                     ) for user in users
                 ]),
                 size=4
@@ -409,7 +434,8 @@ async def frontend_setup(server):
                     buttons.get_button(
                         role,
                         color='success', 
-                        href=f'{admin_prefix}/role/{role}'
+                        href=f'#{role}',
+                        onclick=f"OnClickUpdate('{admin_prefix}/role/{role}', 'page-top')"
                     ) for role in roles
                 ]),
                 size=4
@@ -420,7 +446,8 @@ async def frontend_setup(server):
                     buttons.get_button(
                         action,
                         color='success', 
-                        href=f'{admin_prefix}/action/{action}'
+                        href=f'#{action}',
+                        onclick=f"OnClickUpdate('{admin_prefix}/action/{action}', 'page-top')"
                     ) for action in permissions
                 ]),
                 size=4
@@ -582,7 +609,8 @@ async def frontend_setup(server):
             ],
             submit_name='update role',
             method='post',
-            action=f'/auth/role/{role_name}'
+            action=f'/auth/role/{role_name}',
+            transform_id=f'Update{role_name}'
         )
 
         modal_row = row.get_row(
@@ -597,7 +625,8 @@ async def frontend_setup(server):
                     buttons.get_button(
                         user,
                         color='success', 
-                        href=f'{admin_prefix}/user/{user}'
+                        href=f'#{user}',
+                        onclick=f"OnClickUpdate('{admin_prefix}/user/{user}', 'page-top')"
                     ) for user in users
                 ]),
                 size=4
@@ -608,7 +637,8 @@ async def frontend_setup(server):
                     buttons.get_button(
                         group,
                         color='success', 
-                        href=f'{admin_prefix}/group/{group}'
+                        href=f'#{group}',
+                        onclick=f"OnClickUpdate('{admin_prefix}/group/{group}', 'page-top')"
                     ) for group in groups
                 ]),
                 size=4
@@ -619,7 +649,8 @@ async def frontend_setup(server):
                     buttons.get_button(
                         action,
                         color='success', 
-                        href=f'{admin_prefix}/action/{action}'
+                        href=f'#{action}',
+                        onclick=f"OnClickUpdate('{admin_prefix}/action/{action}', 'page-top')"
                     ) for action in permissions
                 ]),
                 size=4
@@ -778,7 +809,8 @@ async def frontend_setup(server):
             ],
             submit_name='update permission',
             method='post',
-            action='/auth/permissions'
+            action='/auth/permissions',
+            transform_id=f'Update{action}'
         )
 
         modal_row = row.get_row(
@@ -793,7 +825,8 @@ async def frontend_setup(server):
                     buttons.get_button(
                         user,
                         color='success', 
-                        href=f'{admin_prefix}/user/{user}'
+                        href=f'#{user}',
+                        onclick=f"OnClickUpdate('{admin_prefix}/user/{user}', 'page-top')"
                     ) for user in users
                 ]),
                 size=4
@@ -804,7 +837,8 @@ async def frontend_setup(server):
                     buttons.get_button(
                         group,
                         color='success', 
-                        href=f'{admin_prefix}/group/{group}'
+                        href=f'#{group}',
+                        onclick=f"OnClickUpdate('{admin_prefix}/group/{group}', 'page-top')"
                     ) for group in groups
                 ]),
                 size=4
@@ -815,7 +849,8 @@ async def frontend_setup(server):
                     buttons.get_button(
                         role,
                         color='success', 
-                        href=f'{admin_prefix}/role/{role}'
+                        href=f'#{role}',
+                        onclick=f"OnClickUpdate('{admin_prefix}/role/{role}', 'page-top')"
                     ) for role in roles
                 ]),
                 size=4
@@ -921,7 +956,8 @@ async def frontend_setup(server):
                         buttons.get_button(
                             user,
                             color='success', 
-                            href=f'{admin_prefix}/user/{user}'
+                            href=f'#{user}',
+                            onclick=f"OnClickUpdate('{admin_prefix}/user/{user}', 'page-top')"
                         ) for user in users
                     ]),
                     size=4
@@ -932,7 +968,8 @@ async def frontend_setup(server):
                         buttons.get_button(
                             group,
                             color='success', 
-                            href=f'{admin_prefix}/group/{group}'
+                            href=f'#{group}',
+                            onclick=f"OnClickUpdate('{admin_prefix}/group/{group}', 'page-top')"
                         ) for group in groups
                     ]),
                     size=4
@@ -943,7 +980,8 @@ async def frontend_setup(server):
                         buttons.get_button(
                             role,
                             color='success', 
-                            href=f'{admin_prefix}/role/{role}'
+                            href=f'#{role}',
+                            onclick=f"OnClickUpdate('{admin_prefix}/role/{role}', 'page-top')"
                         ) for role in roles
                     ]),
                     size=4
@@ -954,7 +992,8 @@ async def frontend_setup(server):
                         buttons.get_button(
                             action,
                             color='success', 
-                            href=f'{admin_prefix}/action/{action}'
+                            href=f'#{action}',
+                            onclick=f"OnClickUpdate('{admin_prefix}/action/{action}', 'page-top')"
                         ) for action in actions
                     ]),
                     size=4
@@ -1041,7 +1080,65 @@ async def frontend_setup(server):
             below=''
         )
 
-    
+    @admin_gui.get('/email', response_class=HTMLResponse, send_token=True, include_in_schema=False)
+    async def admin_email(access_token=None):
+        modals = []
+        modals.append(
+            modal.get_modal(
+                f'SendTestEmailModal',
+                alert='',
+                body=forms.get_form(
+                    f'Send Test Email',
+                    [
+                        html_input.get_text_input("subject"),
+                        html_input.get_text_input("recipients"),
+                        html_input.get_text_input("email_body"),
+                    ],
+                    submit_name=f'send email',
+                    method='post',
+                    action=f'/email/send?test_email=true'
+                ),
+                footer='',
+                size='large'
+            )
+        )
+
+
+        email_config = await server.db.tables['email_config'].select('*')
+        MAIL_USERNAME = email_config[0]['username'] if email_config else ''
+        MAIL_FROM = email_config[0]['mail_from'] if email_config else ''
+        MAIL_FROM_NAME = email_config[0]['mail_from_name'] if email_config else ''
+        MAIL_SERVER = email_config[0]['server'] if email_config else ''
+        MAIL_PORT = email_config[0]['port'] if email_config else ''
+        MAIL_SSL = email_config[0]['mail_ssl'] if email_config else ''
+        MAIL_TLS = email_config[0]['mail_tls'] if email_config else ''
+
+        return server.admin.admin_page(
+            'Email Configuration',
+            body=forms.get_form(
+                'Configure Email',
+                [
+                    html_input.get_text_input("MAIL_USERNAME", value=MAIL_USERNAME)+
+                    html_input.get_text_input("MAIL_PASSWORD", input_type='password'),
+                    html_input.get_text_input("MAIL_FROM", value=MAIL_FROM) +
+                    html_input.get_text_input("MAIL_FROM_NAME", value=MAIL_FROM_NAME),
+                    html_input.get_text_input("MAIL_SERVER", value=MAIL_SERVER)+
+                    html_input.get_text_input("MAIL_PORT", value=MAIL_PORT),
+                    html_input.get_checkbox('', [('MAIL_SSL', MAIL_SSL), ('MAIL_TLS', MAIL_TLS)])
+                ],
+                submit_name='configure email',
+                method='post',
+                action='/email/setup'
+            )+
+            buttons.get_split_button(
+                f'Send Test Email',
+                icon='envelope',
+                modal=f'SendTestEmailModal'
+            ),
+            current_user=access_token['permissions']['users'][0],
+            modals=''.join(modals)
+        )
+
     @server.server.get('/login', response_class=HTMLResponse, tags=['Login'])
     async def admin_login():
         return server.admin.login_page(welcome_message='Login to begin')

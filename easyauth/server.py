@@ -16,8 +16,9 @@ from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from makefun import wraps
 from inspect import signature, Parameter
-#from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
+from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
 from easyrpc.server import EasyRpcServer
+from easyadmin import card
 
 from easyauth.db import database_setup
 from easyauth.models import tables_setup
@@ -345,29 +346,90 @@ class EasyAuthServer:
             api_router
         )
         return api_router
-    def email_setup(self):
-        self.email_conf = ConnectionConfig(**{
-            "MAIL_USERNAME": os.environ['MAIL_USERNAME'],
-            "MAIL_PASSWORD": os.environ['MAIL_PASSWORD'],
-            "MAIL_FROM": os.environ['MAIL_FROM'],
-            "MAIL_PORT": int(os.environ['MAIL_PORT']),
-            "MAIL_SERVER": os.environ['MAIL_SERVER'],
-            "MAIL_FROM_NAME": os.environ['MAIL_FROM_NAME'],
-            "MAIL_TLS": True,
-            "MAIL_SSL": False
+    async def email_setup(self,
+        username: str,
+        password: str,
+        mail_from: str,
+        mail_from_name: str,
+        server: str,
+        port: int,
+        mail_tls: bool,
+        mail_ssl: bool,
+    ):
+
+        await self.db.tables['email_config'].delete(where={'is_enabled': True})
+
+        # encode password
+        encoded_password = self.encode(days=99000, password=password)
+        await self.db.tables['email_config'].insert(
+            username=username,
+            password=encoded_password,
+            mail_from=mail_from,
+            mail_from_name=mail_from_name,
+            server=server,
+            port=port,
+            mail_tls=mail_tls,
+            mail_ssl=mail_ssl,
+            is_enabled=False
+        )
+
+        await self.db.tables['email_config'].update(
+            is_enabled=True, where={'username': username}
+        )
+
+        return f"email setup completed"
+
+
+    async def get_email_config(self):
+        email_conf = await self.db.tables['email_config'].select(
+            '*', where={'is_enabled': True}
+        )
+        return email_conf
+
+    async def send_email(self, subject: str, email: str, recipients, test_email: bool):
+        conf = await self.get_email_config()
+        if not conf:
+            return f"no email server configured"
+
+        decoded = self.decode(conf[0]['password'])
+
+        conf[0]['password'] = decoded[1]['password']
+        conf = conf[0]
+
+        conf = ConnectionConfig(**{
+            "MAIL_USERNAME": conf['username'],
+            "MAIL_PASSWORD": conf['password'],
+            "MAIL_FROM": conf['mail_from'],
+            "MAIL_PORT": conf['port'],
+            "MAIL_SERVER": conf['server'],
+            "MAIL_FROM_NAME": conf['mail_from_name'],
+            "MAIL_TLS": conf['mail_tls'],
+            "MAIL_SSL": conf['mail_ssl']
         })
-    async def send_email(subject: str, email: str, recipients: list):
+
         body = f"""<p>{email}</p>"""
+
         message = MessageSchema(
             subject=f"{subject}",
-            recipients=[email],  # List of recipients, as many as you can pass 
+            recipients=recipients if isinstance(recipients, list) else [recipients],  # List of recipients, as many as you can pass 
             body=body,
             subtype="html"
         )
 
+        async def email_send():
+            try:
+                return await fm.send_message(message)
+            except Exception as e:
+                self.log.exception(f"Error sending email")
+                return f"Error Sending Email - {repr(e)}"
+
         fm = FastMail(conf)
-        asyncio.create_task(fm.send_message(message))
-        return {"message": "email has been sent", "otp": otp}
+        if not test_email:
+            asyncio.create_task(email_send())
+        else:
+            result =  await email_send()
+            print(result)
+        return {"message": "email sent"}
 
     def cors_setup(self):
         origins = ['*']
@@ -447,14 +509,27 @@ class EasyAuthServer:
             self._privkey, 
             ['RS256']
         )
-    def encode(self, secret, **kw):
-        try:
-            return pyjwt.encode(kw, secret, algorithm='HS256')
-        except Exception as e:
-            self.log.exception(f"error encoding {kw} using {secret}")
+    def encode(self, minutes=60, days=0, **kw):
+        #try:
+        #    return pyjwt.encode(kw, secret, algorithm='HS256')
+        #except Exception as e:
+        #    self.log.exception(f"error encoding {kw} using {secret}")
+        encoded = jwt.generate_jwt(
+            kw,
+            self._privkey,
+            'RS256', 
+            datetime.timedelta(minutes=minutes, days=days)
+        )
+        return encoded
+    
 
-    def decode(self, token, secret):
-        return pyjwt.decode(token.encode('utf-8'), secret, algorithms='HS256')
+    def decode(self, encoded):
+        return jwt.verify_jwt(
+            encoded, 
+            self._privkey, 
+            ['RS256']
+        )
+        #return pyjwt.decode(token.encode('utf-8'), secret, algorithms='HS256')
 
     def encode_password(self, pw):
         hash_and_salt = bcrypt.hashpw(pw.encode(), bcrypt.gensalt())
@@ -462,7 +537,6 @@ class EasyAuthServer:
     def is_password_valid(self, encoded, input_password):
         has_and_salt = encoded.encode()
         return bcrypt.checkpw(input_password.encode(), has_and_salt)
-
 
     def decode_password(self, encoded, auth):
         return self.decode(encoded, auth)

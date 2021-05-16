@@ -4,7 +4,7 @@ from starlette.status import HTTP_302_FOUND
 from fastapi import HTTPException, Depends, Form, Response, Request
 from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.security import OAuth2PasswordRequestForm
-from easyauth.models import User, Service, Group, Role, Permission
+from easyauth.models import User, Service, Group, Role, Permission, EmailConfig, Email
 
 async def api_setup(server):
 
@@ -519,3 +519,31 @@ async def api_setup(server):
         await verify_action(action)
         permission = await permissions_tb[action]
         return permission
+    
+
+    ## Email API
+
+    @api_router.get('/email/config', tags=['Email'])
+    async def get_email_configuration():
+        return await server.get_email_config()
+
+    @api_router.post('/email/setup', tags=['Email'])
+    async def setup_email_cofiguration(config: EmailConfig):
+        return await server.email_setup(
+            username=config.MAIL_USERNAME,
+            password=config.MAIL_PASSWORD,
+            mail_from=config.MAIL_FROM,
+            mail_from_name=config.MAIL_FROM,
+            server=config.MAIL_SERVER,
+            port=config.MAIL_PORT,
+            mail_tls=config.MAIL_TLS,
+            mail_ssl=config.MAIL_SSL
+        )
+    @api_router.post('/email/send', tags=['Email'])
+    async def send_email(email: Email, test_email: bool = False):
+        return await server.send_email(
+            subject=email.subject,
+            email=email.email_body,
+            recipients=email.recipients,
+            test_email=test_email
+        )
