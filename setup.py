@@ -4,13 +4,14 @@ BASE_REQUIREMENTS = [
     'makefun==1.9.5', 'PyJWT==2.0.0', 
     'python-jwt==3.3.0', 'fastapi', 
     'uvicorn', 'python-multipart==0.0.5', 
-    'easyadmin', 'easyrpc>=0.241',
+    'easyadmin==0.136', 'easyrpc>=0.241',
+    
 ]
 SERVER_REQUIREMENTS = [
     'aiopyql>=0.357', 'cryptography', 
     'bcrypt==3.2.0', 'uvloop', 
     'example', 'httptools',
-    'gunicorn'
+    'gunicorn', 'fastapi-mail==0.3.7'
     ]
 CLIENT_REQUIREMENTS = []
 
