@@ -26,7 +26,7 @@ def db_proxy_setup(server):
                 if not db_config[cfg.lower()]:
                     raise Exception(f"missing required DB_{cfg} environment variable")
         else:
-            sqlite_db_path = os.environ.get('PYQL_VOLUME_PATH')
+            sqlite_db_path = os.environ.get('DB_LOCAL_PATH')
             if sqlite_db_path:
                 db_config['database'] = f"{sqlite_db_path}/{db_name}"
         db_cache = os.environ.get('DB_CACHE')
