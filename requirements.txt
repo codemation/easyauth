@@ -6,7 +6,7 @@ fastapi
 uvicorn
 pyjwt
 python-multipart
-easyadmin==0.136
+easyadmin>=0.145
 fastapi-mail==0.3.7
 aiohttp
 gunicorn
