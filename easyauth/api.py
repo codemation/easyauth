@@ -1,10 +1,22 @@
 from typing import Optional, List, Union
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from starlette.status import HTTP_302_FOUND
 from fastapi import HTTPException, Depends, Form, Response, Request
 from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.security import OAuth2PasswordRequestForm
-from easyauth.models import User, Service, Group, Role, Permission, EmailConfig, Email
+from easyauth.models import (
+    User, RegisterUser, 
+    Service, Group, 
+    Role, Permission, 
+    EmailConfig, Email,
+    EmailSetup, ActivationCode
+)
+from easyauth.exceptions import (
+    DuplicateUserError,
+    InvalidActivationCode,
+    InvalidUsernameOrPassword
+)
+from easyadmin.elements import card
 
 async def api_setup(server):
 
@@ -188,10 +200,7 @@ async def api_setup(server):
                 "access_token": token, 
                 "token_type": "bearer"
             }
-        raise Exception(f"invalid username / password")
-        raise HTTPException(
-            detail=f"invalid username / password", status_code=401
-        )
+        raise InvalidUsernameOrPassword
         
 
     @server.server.post('/auth/token', response_model=Token, tags=['Token'])
@@ -253,6 +262,7 @@ async def api_setup(server):
             response.delete_cookie('ref')
 
         return RedirectResponse(redirect_ref, headers=response.headers, status_code=HTTP_302_FOUND)
+
     @server.server.get("/logout", tags=['Login'], response_class=HTMLResponse)
     async def logout_page(
         response: Response
@@ -267,9 +277,108 @@ async def api_setup(server):
         response.set_cookie('token', 'INVALID')
         return RedirectResponse('/login/re', headers=response.headers)
 
+    @server.server.post("/auth/user/activate")
+    async def activate_user(activation_code: ActivationCode):
+        code = activation_code.activation_code
+
+        # verify activation code
+        new_user = await server.db.tables['pending_users'].select(
+            '*',
+            where={'activation_code': code}
+        )
+        if not new_user:
+            raise InvalidActivationCode()
+        
+        user_info = new_user[0]['user_info']
+
+        # decode
+        user_info = server.decode(user_info)[1]['user_info']
+
+        user = User(
+            username=user_info['username'],
+            password=user_info['password'],
+            full_name=user_info['full name'],
+            email=user_info['email address']
+        )
+
+        result = await _create_user(user)
+        server.log.warning(f"user {user_info['username']} created after successful activation")
+        return f"{user_info['username']} activated"
+
+
+    @server.server.post("/auth/user/register")
+    async def register_user(user_info: dict):
+        """
+        registers a new user, if email is configured & enabled 
+        sends activation email for user. 
+        """
+        print(f"register_user: user_info {user_info}")
+
+        try:
+            register_user = RegisterUser(
+                username=user_info['username'],
+                full_name=user_info['full name'],
+                password1=user_info['password'],
+                password2=user_info['repeat password'],
+                email=user_info['email address']
+            )
+            user = User(
+                username=user_info['username'],
+                password=user_info['password'],
+                full_name=user_info['full name'],
+                email=user_info['email address']
+            )
+        except ValueError as e:
+            raise HTTPException(
+                status_code=422,
+                detail=repr(e)
+            )
+        
+        # check for duplicate user
+        duplicate = await server.db.tables['users'].select(
+            'username', 
+            where={'username': user_info['username']}
+        )
+        if duplicate:
+            raise DuplicateUserError(duplicate[0]['username'])
+
+        email = await server.db.tables['email_config'].select('*')
+        if email and email[0]['send_activation_emails']:
+
+            # generate activation code
+            activation_code = server.generate_random_string(16)
+
+            # encrypt user details with activation code & store
+            encoded_data = server.encode(user_info=user_info)
+
+            # insert into unactivated users
+            #breakpoint()
+
+            result = await server.db.tables['pending_users'].insert(
+                activation_code=activation_code,
+                user_info=encoded_data
+            )
+
+            # send activation code to email
+            await server.send_email(
+                "New User Activation",
+                f"New User Activation Code: {activation_code}",
+                user_info['email address'],
+
+            )
+            return f"Activation email sent to {user_info['email address']}"
+
+        return await _create_user(user)
+
     @api_router.put('/auth/user', status_code=201, tags=['Users'])
     async def create_user(user: User):
+        return await _create_user(user)
+        
+    async def _create_user(user: User):
         user = dict(user)
+
+        if not user['groups']:
+            user['groups'] = []
 
         # list -> dict conversion for db storage
         if isinstance(user['groups'], list):
@@ -401,7 +510,7 @@ async def api_setup(server):
     class UpdateRoles(BaseModel):
         roles: list
 
-    @api_router.post('/auth/group/{group}', status_code=201, tags=['Groups'])
+    @api_router.post('/auth/group/{group}', status_code=200, tags=['Groups'])
     async def update_group(group: str, roles: UpdateRoles):
         roles = dict(roles)
         await verify_group(group)
@@ -423,7 +532,7 @@ async def api_setup(server):
     async def get_all_groups():
         return await groups_tb.select('*')
 
-    @api_router.get('/auth/groups/{group}', tags=['Groups'])
+    @api_router.get('/auth/groups/{group_name}', tags=['Groups'])
     async def get_group(group_name: str):
         await verify_group(group_name)
         group = await groups_tb[group_name]
@@ -451,7 +560,7 @@ async def api_setup(server):
     class UpdateActions(BaseModel):
         actions: list
 
-    @api_router.post('/auth/role/{role}', status_code=201, tags=['Roles'])
+    @api_router.post('/auth/role/{role}', status_code=200, tags=['Roles'])
     async def update_role(role: str, actions: UpdateActions):
         actions = dict(actions)
         await verify_role(role)
@@ -494,7 +603,7 @@ async def api_setup(server):
     class UpdateDetails(BaseModel):
         detail: str
 
-    @api_router.post('/auth/permissions', status_code=201, tags=['Actions'])
+    @api_router.post('/auth/permissions', status_code=200, tags=['Actions'])
     async def update_permission(action: str, detail: UpdateDetails):
         detail = dict(detail)
         await verify_action(action)
@@ -528,7 +637,8 @@ async def api_setup(server):
         return await server.get_email_config()
 
     @api_router.post('/email/setup', tags=['Email'])
-    async def setup_email_cofiguration(config: EmailConfig):
+    async def setup_email_cofiguration(config: EmailSetup):
+        print(config)
         return await server.email_setup(
             username=config.MAIL_USERNAME,
             password=config.MAIL_PASSWORD,
@@ -536,8 +646,9 @@ async def api_setup(server):
             mail_from_name=config.MAIL_FROM,
             server=config.MAIL_SERVER,
             port=config.MAIL_PORT,
-            mail_tls=config.MAIL_TLS,
-            mail_ssl=config.MAIL_SSL
+            mail_tls='MAIL_TLS' in config.MAIL_TLS,
+            mail_ssl='MAIL_SSL' in config.MAIL_SSL,
+            send_activation_emails='SEND_ACTIVATION_EMAILS' in config.SEND_ACTIVATION_EMAILS
         )
     @api_router.post('/email/send', tags=['Email'])
     async def send_email(email: Email, test_email: bool = False):

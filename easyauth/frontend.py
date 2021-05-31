@@ -1,6 +1,8 @@
 from copy import deepcopy
 from easyadmin import Admin, buttons, forms, html_input, row, card, modal, admin
 from easyadmin.elements import scripts
+from easyadmin.elements.card import get_card
+from easyadmin.pages import register
 from fastapi.responses import HTMLResponse
 from fastapi import HTTPException
 
@@ -174,8 +176,10 @@ async def frontend_setup(server):
                 if details['account_type'] == 'user' else '',
                 html_input.get_checkbox('groups', [
                     (group, True) for group in details['groups']['groups'] ] +
-                    [(group, False) for group in all_groups if not group in details['groups']['groups']]
-                    )
+                    [(group, False) for group in all_groups if not group in details['groups']['groups']],
+                    size=12,
+                    unique_id=username
+                )
             ],
             submit_name='update user',
             method='post',
@@ -305,18 +309,18 @@ async def frontend_setup(server):
                 for group in users_table[ind]['groups']['groups']
             ])
             actions = ( 
-                    buttons.get_split_button(
-                        f'view/edit',
-                        icon='eye',
-                        modal=f'view_{username}'
-                    ) + 
-                    buttons.get_split_button(
-                        f'delete', 
-                        modal=f'delete{username}Modal', 
-                        color='danger',
-                        icon='trash'
-                    )
+                buttons.get_split_button(
+                    f'view/edit',
+                    icon='eye',
+                    modal=f'view_{username}'
+                ) + 
+                buttons.get_split_button(
+                    f'delete', 
+                    modal=f'delete{username}Modal', 
+                    color='danger',
+                    icon='trash'
                 )
+            )
             if account_type == 'service':
                 token_button = buttons.get_split_button(
                         f'generate token', 
@@ -346,7 +350,11 @@ async def frontend_setup(server):
                     html_input.get_text_input("password", input_type='password')
                     if account_type =='user' else '',
                     email_and_full_name_input if account_type =='user' else '' ,
-                    html_input.get_checkbox('groups', [(group, False) for group in deepcopy(groups)])
+                    html_input.get_checkbox(
+                        'groups', 
+                        [(group, False) for group in deepcopy(groups)],
+                        size=12
+                    )
                 ],
                 submit_name=f'create {account_type}',
                 method='put',
@@ -382,7 +390,7 @@ async def frontend_setup(server):
                 if isinstance(action['permissions'], dict):
                     action['permissions'] = action['permissions']['actions']
                 for action in action['permissions']:
-                    if action in all_actions:
+                    if action in all_actions and not action in permissions:
                         permissions.append(action)
 
         users = await server.auth_users.select('username', 'groups')
@@ -401,7 +409,8 @@ async def frontend_setup(server):
                 html_input.get_text_input("group_name", value=group_name),
                 html_input.get_checkbox(
                     'roles',
-                    roles_in_group
+                    roles_in_group,
+                    size=12
                 ) if len(roles_in_group) > 0 else "No Roles"
             ],
             submit_name='update group',
@@ -464,7 +473,7 @@ async def frontend_setup(server):
         if not group:
             raise HTTPException(
                 status_code=404,
-                detail=f"No Group with name {group@_name} exists"
+                detail=f"No Group with name {group_name} exists"
             )
 
         group_page = admin.get_admin_page(
@@ -550,7 +559,11 @@ async def frontend_setup(server):
                 'Create Group',
                 [
                     html_input.get_text_input("group_name"),
-                    html_input.get_checkbox('roles', [(role, False) for role in roles])
+                    html_input.get_checkbox(
+                        'roles', 
+                        [(role, False) for role in roles],
+                        size=12
+                    )
                 ],
                 submit_name='create group',
                 method='put',
@@ -604,7 +617,8 @@ async def frontend_setup(server):
                 html_input.get_text_input("role", value=role_name),
                 html_input.get_checkbox(
                     'actions', 
-                    actions_in_role
+                    actions_in_role,
+                    size=12
                 ) if len(actions_in_role) > 0 else "no actions"
             ],
             submit_name='update role',
@@ -745,7 +759,11 @@ async def frontend_setup(server):
                 'Create Role',
                 [
                     html_input.get_text_input("role"),
-                    html_input.get_checkbox('permissions', [(action, False) for action in permissions])
+                    html_input.get_checkbox(
+                        'permissions', 
+                        [(action, False) for action in permissions],
+                        size=12
+                    )
                 ],
                 submit_name='create role',
                 method='put',
@@ -942,10 +960,11 @@ async def frontend_setup(server):
     
 
     def get_token_details(token: dict):
-        users = token['users']
-        groups = token['groups']
-        roles = token['roles']
-        actions = token['actions']
+        
+        users = token['users'] if 'users' in token else []
+        groups = token['groups'] if 'groups' in token else []
+        roles = token['roles'] if 'roles' in token else []
+        actions = token['actions'] if 'actions' in token else []
 
         modal_row = card.get_card(
             f"{users[0]} Token Permissions",
@@ -1088,7 +1107,7 @@ async def frontend_setup(server):
                 f'SendTestEmailModal',
                 alert='',
                 body=forms.get_form(
-                    f'Send Test Email',
+                    f'Send A Test Email',
                     [
                         html_input.get_text_input("subject"),
                         html_input.get_text_input("recipients"),
@@ -1096,7 +1115,8 @@ async def frontend_setup(server):
                     ],
                     submit_name=f'send email',
                     method='post',
-                    action=f'/email/send?test_email=true'
+                    action=f'/email/send?test_email=true',
+                    transform_id='SendATestEmail'
                 ),
                 footer='',
                 size='large'
@@ -1112,6 +1132,7 @@ async def frontend_setup(server):
         MAIL_PORT = email_config[0]['port'] if email_config else ''
         MAIL_SSL = email_config[0]['mail_ssl'] if email_config else ''
         MAIL_TLS = email_config[0]['mail_tls'] if email_config else ''
+        SEND_ACTIVATION_EMAILS = email_config[0]['send_activation_emails'] if email_config else ''
 
         return server.admin.admin_page(
             'Email Configuration',
@@ -1124,11 +1145,14 @@ async def frontend_setup(server):
                     html_input.get_text_input("MAIL_FROM_NAME", value=MAIL_FROM_NAME),
                     html_input.get_text_input("MAIL_SERVER", value=MAIL_SERVER)+
                     html_input.get_text_input("MAIL_PORT", value=MAIL_PORT),
-                    html_input.get_checkbox('', [('MAIL_SSL', MAIL_SSL), ('MAIL_TLS', MAIL_TLS)])
+                    html_input.get_checkbox('MAIL_SSL', [('MAIL_SSL', MAIL_SSL)]) +
+                    html_input.get_checkbox('MAIL_TLS', [('MAIL_TLS', MAIL_TLS)])+
+                    html_input.get_checkbox('SEND_ACTIVATION_EMAILS', [('SEND_ACTIVATION_EMAILS', SEND_ACTIVATION_EMAILS)]),
                 ],
                 submit_name='configure email',
                 method='post',
-                action='/email/setup'
+                action='/email/setup',
+                transform_id=f'ConfigureEmail',
             )+
             buttons.get_split_button(
                 f'Send Test Email',
@@ -1142,3 +1166,34 @@ async def frontend_setup(server):
     @server.server.get('/login', response_class=HTMLResponse, tags=['Login'])
     async def admin_login():
         return server.admin.login_page(welcome_message='Login to begin')
+
+    @server.server.get('/register', response_class=HTMLResponse, tags=['User'])
+    async def admin_register():
+        return register.get_register_user_page(
+            form = forms.get_form(
+                title='Register User',
+                rows=[
+                    html_input.get_text_input('username', size=12),
+                    html_input.get_text_input('password', input_type='password',  size=12),
+                    html_input.get_text_input('repeat password', input_type='password',  size=12),
+                    html_input.get_text_input('full name', size=12),
+                    html_input.get_text_input('email address', size=12)
+                ],
+                submit_name='Register User',
+                action="/auth/user/register",
+                transform_id='RegisterUser'
+            )
+        )
+    @server.server.get('/activate', response_class=HTMLResponse, tags=['User'])
+    async def admin_activate():
+        return register.get_register_user_page(
+            form = forms.get_form(
+                title='Activate User',
+                rows=[
+                    html_input.get_text_input('activation_code', size=12)
+                ],
+                submit_name='Activate',
+                action="/auth/user/activate",
+                transform_id='ActivateUser'
+            )
+        )
