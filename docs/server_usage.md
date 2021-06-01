@@ -200,3 +200,18 @@ $ docker logs easyauth[2021-04-23 15:36:07 +0000] [6] [INFO] Starting gunicorn 2
 04-23 15:36 EasyAuthServer ERROR    detected new EasyAuth server, created admin user with password: cwmykhzj
 [2021-04-23 15:36:09 +0000] [8] [INFO] Application startup complete.
 ```
+
+### Email
+![](images/email_gui.png)
+An EasyAuthServer may be configured to use an SMTP server. The EasyAuthServer and connected EasyAuthClients can utilize the email server for the following:
+
+- sending activation codes for new user registrations 
+- sending password reset emails
+
+![](images/register_gui.png)
+!!! TIP
+    Default endpoints for register exist at /register 
+
+![](images/activate_gui.png)
+!!! TIP
+    Default endpoints for activate exist at /activate 

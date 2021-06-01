@@ -1,5 +1,23 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError, root_validator, EmailStr
 from typing import Optional, Union
+
+class RegisterUser(BaseModel):
+    username: str
+    password1: str
+    password2: str
+    full_name: str = None
+    email: EmailStr = None
+    
+    @root_validator
+    def check_passwords_match(cls, values):
+        pw1, pw2 = values.get('password1'), values.get('password2')
+        if pw1 is not None and pw2 is not None and pw1 != pw2:
+            raise ValueError('passwords do not match')
+        return values
+        
+class ActivationCode(BaseModel):
+    activation_code: str
+
 
 class User(BaseModel):
     username: str = None
@@ -33,6 +51,18 @@ class EmailConfig(BaseModel):
     MAIL_FROM_NAME: str
     MAIL_TLS: bool = True
     MAIL_SSL: bool = False
+    SEND_ACTIVATION_EMAILS: bool
+
+class EmailSetup(BaseModel):
+    MAIL_USERNAME: str
+    MAIL_PASSWORD: str
+    MAIL_FROM: str
+    MAIL_SERVER: str
+    MAIL_PORT: int
+    MAIL_FROM_NAME: str
+    MAIL_TLS: list = []
+    MAIL_SSL: list = []
+    SEND_ACTIVATION_EMAILS: list = []
 
 class Email(BaseModel):
     subject: str
@@ -223,12 +253,7 @@ async def tables_setup(server):
 
 
     if new_user:
-        import random, string
-        def get_random_string(length):
-            letters = string.ascii_lowercase
-            result_str = ''.join(random.choice(letters) for i in range(length))
-            return result_str
-        random_password = get_random_string(8)
+        random_password = server.generate_random_string(8)
         await server.auth_users.insert(
             username='admin',
             password=server.encode_password(random_password),
@@ -274,8 +299,19 @@ async def tables_setup(server):
             ['port', 'str'],
             ['mail_tls', 'bool'],
             ['mail_ssl', 'bool'],
-            ['is_enabled', 'bool']
+            ['is_enabled', 'bool'],
+            ['send_activation_emails', 'bool']
         ],
         'username',
+        cache_enabled=True
+    )
+
+    await db.create_table(
+        'pending_users', 
+        [
+            ['activation_code', 'str', 'UNIQUE NOT NULL'],
+            ['user_info', 'str'],
+        ],
+        'activation_code', 
         cache_enabled=True
     )

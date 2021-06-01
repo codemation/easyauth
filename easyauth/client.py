@@ -1,8 +1,6 @@
 import os, uuid
 import jwcrypto.jwk as jwk
 import python_jwt as jwt
-import jwt as pyjwt
-import datetime
 import json
 import logging
 import asyncio
@@ -13,11 +11,12 @@ from fastapi.security import OAuth2PasswordBearer
 from fastapi.responses import HTMLResponse, RedirectResponse
 from makefun import wraps
 from inspect import signature, Parameter
+from easyauth.models import ActivationCode
 from easyadmin import Admin
-from aiohttp import ClientSession
+from easyadmin.pages import register
+from easyadmin.elements import forms, html_input
 from easyauth.router import EasyAuthAPIRouter
 from easyrpc.server import EasyRpcServer
-from easyrpc.proxy import EasyRpcProxy
 
 
 class EasyAuthClient:
@@ -181,6 +180,49 @@ class EasyAuthClient:
                 status_code=HTTP_302_FOUND
             )
 
+        @server.get('/register', response_class=HTMLResponse, tags=['User'])
+        async def admin_register():
+            return register.get_register_user_page(
+                form = forms.get_form(
+                    title='Register User',
+                    rows=[
+                        html_input.get_text_input('username', size=12),
+                        html_input.get_text_input('password', input_type='password',  size=12),
+                        html_input.get_text_input('repeat password', input_type='password',  size=12),
+                        html_input.get_text_input('full name', size=12),
+                        html_input.get_text_input('email address', size=12)
+                    ],
+                    submit_name='Register User',
+                    action="/register",
+                    transform_id='RegisterUser'
+                )
+            )
+        @server.post('/register', response_class=HTMLResponse, tags='User')
+        async def admin_register_send(user_info: dict):
+            return await auth_server.rpc_server['easyauth']['register_user'](
+                user_info
+            )
+
+        @server.get('/activate', response_class=HTMLResponse, tags=['User'])
+        async def admin_activate():
+            return register.get_register_user_page(
+                form = forms.get_form(
+                    title='Activate User',
+                    welcome_message='Activate your account',
+                    rows=[
+                        html_input.get_text_input('activation_code', size=12)
+                    ],
+                    submit_name='Activate',
+                    action="/activate",
+                    transform_id='ActivateUser'
+                )
+            )
+
+        @server.post('/activate', response_class=HTMLResponse, tags='User')
+        async def admin_activate_send(activation_code: ActivationCode):
+            return await auth_server.rpc_server['easyauth']['activate_user'](
+                activation_code.dict()
+            )
 
         @server.get("/logout", tags=['Login'], response_class=HTMLResponse, include_in_schema=False)
         async def logout_page(

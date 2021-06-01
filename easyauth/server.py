@@ -1,4 +1,5 @@
 import os, uuid
+import random, string
 import bcrypt
 import jwcrypto.jwk as jwk
 import python_jwt as jwt
@@ -355,6 +356,7 @@ class EasyAuthServer:
         port: int,
         mail_tls: bool,
         mail_ssl: bool,
+        send_activation_emails: bool,
     ):
 
         await self.db.tables['email_config'].delete(where={'is_enabled': True})
@@ -370,11 +372,13 @@ class EasyAuthServer:
             port=port,
             mail_tls=mail_tls,
             mail_ssl=mail_ssl,
-            is_enabled=False
+            is_enabled=False,
+            send_activation_emails=send_activation_emails,
         )
 
         await self.db.tables['email_config'].update(
-            is_enabled=True, where={'username': username}
+            is_enabled=True, 
+            where={'username': username}
         )
 
         return f"email setup completed"
@@ -386,7 +390,8 @@ class EasyAuthServer:
         )
         return email_conf
 
-    async def send_email(self, subject: str, email: str, recipients, test_email: bool):
+    async def send_email(self, subject: str, email: str, recipients, test_email: bool = False):
+
         conf = await self.get_email_config()
         if not conf:
             return f"no email server configured"
@@ -530,6 +535,9 @@ class EasyAuthServer:
             ['RS256']
         )
         #return pyjwt.decode(token.encode('utf-8'), secret, algorithms='HS256')
+    def generate_random_string(self, size: int) -> str:
+        letters = string.ascii_lowercase
+        return ''.join(random.choice(letters) for i in range(size))    
 
     def encode_password(self, pw):
         hash_and_salt = bcrypt.hashpw(pw.encode(), bcrypt.gensalt())
