@@ -1,7 +1,6 @@
 from copy import deepcopy
 from easyadmin import Admin, buttons, forms, html_input, row, card, modal, admin
 from easyadmin.elements import scripts
-from easyadmin.elements.card import get_card
 from easyadmin.pages import register
 from fastapi.responses import HTMLResponse
 from fastapi import HTTPException
@@ -298,7 +297,8 @@ async def frontend_setup(server):
                             )],
                             submit_name=f'Create Token',
                             method='get',
-                            action=f'/auth/serviceaccount/token/{username}'
+                            action=f'/auth/serviceaccount/token/{username}',
+                            transform_id=f'Generate{username}token'
                         ),
                         footer='',
                         size='sm'
@@ -1187,6 +1187,8 @@ async def frontend_setup(server):
     @server.server.get('/activate', response_class=HTMLResponse, tags=['User'])
     async def admin_activate():
         return register.get_register_user_page(
+            title='Activate user',
+            welcome_message='Activate your account',
             form = forms.get_form(
                 title='Activate User',
                 rows=[

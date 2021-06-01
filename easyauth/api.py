@@ -278,7 +278,12 @@ async def api_setup(server):
         return RedirectResponse('/login/re', headers=response.headers)
 
     @server.server.post("/auth/user/activate")
-    async def activate_user(activation_code: ActivationCode):
+    async def activate_user_api(activation_code: ActivationCode):
+        return await activate_user(activation_code)
+
+    @server.rpc_server.origin(namespace='easyauth')
+    async def activate_user(activation_code: dict):
+        activation_code = ActivationCode(**activation_code)
         code = activation_code.activation_code
 
         # verify activation code
@@ -307,6 +312,10 @@ async def api_setup(server):
 
 
     @server.server.post("/auth/user/register")
+    async def register_user_api(user_info: dict):
+        return await register_user(user_info)
+
+    @server.rpc_server.origin(namespace='easyauth')
     async def register_user(user_info: dict):
         """
         registers a new user, if email is configured & enabled 
