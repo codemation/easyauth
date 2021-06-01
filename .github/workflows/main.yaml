@@ -24,7 +24,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          pip install pytest
+          pip install pytest requests
       - name: Test EasyAuth
         run: |
           pytest tests/test_server_api.py
