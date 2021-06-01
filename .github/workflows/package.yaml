@@ -33,7 +33,7 @@ jobs:
           cat > server_sqlite.json << EOF
           {
               "DB_TYPE": "sqlite",
-              "DB_NAME": "auth",
+              "DB_NAME": "tests/auth",
               "ISSUER": "EasyAuth",
               "SUBJECT": "EasyAuthAuth",
               "AUDIENCE": "EasyAuthApis",
