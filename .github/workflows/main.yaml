@@ -25,6 +25,19 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install pytest requests
+      - name: Setup Test Configuration
+        run: |
+          cat > server_sqlite.json << EOF
+          {
+              "DB_TYPE": "sqlite",
+              "DB_NAME": "auth",
+              "ISSUER": "EasyAuth",
+              "SUBJECT": "EasyAuthAuth",
+              "AUDIENCE": "EasyAuthApis",
+              "KEY_PATH": "$(pwd)",
+              "KEY_NAME": "test_key"
+          }
+          EOF
       - name: Test EasyAuth
         run: |
           pytest tests/test_server_api.py
