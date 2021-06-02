@@ -2,7 +2,7 @@ name: Test EasyAuth
 on: ['pull_request']
 jobs:
   # Label of the container job
-  test-postgres-mysql-sqlite:
+  test_easyauth:
     # Containers must run in Linux based operating systems
     runs-on: ubuntu-latest
     # Docker Hub image that `container-job` executes in
