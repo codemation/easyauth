@@ -10,3 +10,5 @@ easyadmin>=0.145
 fastapi-mail==0.3.7
 aiohttp
 gunicorn
+email_validator
+easyrpc

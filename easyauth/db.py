@@ -141,3 +141,6 @@ async def database_setup(server, db_proxy_port):
             await asyncio.sleep(1)
             await server.quorum_db.close()
         asyncio.create_task(db_cleanup())
+    @server.server.on_event('shutdown')
+    async def quorum_close():
+        await server.quorum_db.close()

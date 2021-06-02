@@ -1,0 +1,77 @@
+name: Package EasyAuth
+on:
+  push:
+    branches:
+      - master
+jobs:
+  # Label of the container job
+  test-easyauth:
+    # Containers must run in Linux based operating systems
+    runs-on: ubuntu-latest
+    # Docker Hub image that `container-job` executes in
+    #container: joshjamison/python38:latest
+    strategy:
+      matrix:
+        python-version: [3.7,3.8,3.9]
+
+    steps:
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+      # Downloads a copy of the code in your repository before running CI tests
+      - name: Check out repository code
+        uses: actions/checkout@v2
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install pytest requests
+      - name: Setup Test Configuration
+        run: |
+          cat > server_sqlite.json << EOF
+          {
+              "DB_TYPE": "sqlite",
+              "DB_NAME": "tests/auth",
+              "ISSUER": "EasyAuth",
+              "SUBJECT": "EasyAuthAuth",
+              "AUDIENCE": "EasyAuthApis",
+              "KEY_PATH": "$(pwd)",
+              "KEY_NAME": "test_key"
+          }
+          EOF
+      - name: Test EasyAuth
+        run: |
+          pytest tests/test_server_api.py
+  package:
+    needs: test-easyauth
+    name: Release
+    runs-on: ubuntu-latest
+    steps:
+      # Downloads a copy of the code in your repository before running CI tests
+      - name: Check out repository code
+        uses: actions/checkout@v2
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.8
+      - name: Install Packaging dependencies
+        run: |
+          pip install wheel twine
+
+      - name: Package & Test PyPI Installation
+        run: |
+          export NEXTVERSION=$(pip -qqq download easy-auth && ls easy_auth*.whl | sed 's/-/" "/g' | awk '{print "(" $2 ")"}' |  python nextbuild.py)
+          sed -i 's/PYQLVERSION/'$NEXTVERSION'/g' setup.py
+          python setup.py bdist_wheel
+          export PYQL_PACKAGE=$(pwd)/dist/easy_auth-$NEXTVERSION-py3-none-any.whl
+          pip install $(echo -n $PYQL_PACKAGE)
+
+      - name: Upload to PyPi
+        env: # Or as an environment variable
+          PYPI: ${{ secrets.PYPI }}
+        run: |
+          export NEXTVERSION=$(pip -qqq download easy_auth && ls easy_auth*.whl | sed 's/-/" "/g' | awk '{print "(" $2 ")"}' |  python nextbuild.py) 
+          export PYQL_PACKAGE=$(pwd)/dist/easy_auth-$NEXTVERSION-py3-none-any.whl
+          python -m twine upload $(pwd)/dist/easy_auth-$NEXTVERSION-py3-none-any.whl -u codemation -p $PYPI

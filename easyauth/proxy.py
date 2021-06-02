@@ -29,6 +29,7 @@ def db_proxy_setup(server):
             sqlite_db_path = os.environ.get('DB_LOCAL_PATH')
             if sqlite_db_path:
                 db_config['database'] = f"{sqlite_db_path}/{db_name}"
+                
         db_cache = os.environ.get('DB_CACHE')
         if db_cache:
             db_config['cache_enabled'] = True if not db_cache == 0 else False
@@ -156,7 +157,7 @@ def db_proxy_setup(server):
 def manager_proxy_setup(server):
 
     @server.on_event('startup')
-    async def db_setup():
+    async def manager_setup():
         rpc_config = {}
         
         rpc_secret = os.environ.get('RPC_SECRET')
