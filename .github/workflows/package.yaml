@@ -2,7 +2,7 @@ name: Package EasyAuth
 on:
   push:
     branches:
-      - master
+      - main
 jobs:
   # Label of the container job
   test-easyauth:
