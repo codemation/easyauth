@@ -63,7 +63,7 @@ jobs:
       - name: Package & Test PyPI Installation
         run: |
           export NEXTVERSION=$(pip -qqq download easy-auth && ls easy_auth*.whl | sed 's/-/" "/g' | awk '{print "(" $2 ")"}' |  python nextbuild.py)
-          sed -i 's/PYQLVERSION/'$NEXTVERSION'/g' setup.py
+          sed -i 's/NEXTVERSION/'$NEXTVERSION'/g' setup.py
           python setup.py bdist_wheel
           export PYQL_PACKAGE=$(pwd)/dist/easy_auth-$NEXTVERSION-py3-none-any.whl
           pip install $(echo -n $PYQL_PACKAGE)
