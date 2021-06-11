@@ -43,7 +43,7 @@ Actions are the most granuar permission that can be created to define something 
 ### Tokens
 Tokens are created for a specifc user, that contain the full permissions tree for a specific user (Groups, Roles, Actions)
 
-![](images/gui/tokens_gui.png)
+![](images/gui/token_gui.png)
 
 
 #### User Token - Expiration

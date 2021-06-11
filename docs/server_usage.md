@@ -246,3 +246,23 @@ EasyAuth can be enabled to support registering / login from authenticated Google
 ![](images/google_credentials.png)
 
 ![](images/google_credentials_setup.png)
+
+
+!!! Note "Note on EasyAuthClients"
+    EasyAuthClient inherit the ability use a EasyAuthServers Google configuration, but still require associating the clients URIs http://client-name:port/ from the google console. 
+
+!!! TIP 
+    In testing Google authentication locally, redirect your local DNS in /etc/hosts 
+
+```bash
+$ cat /etc/hosts
+127.0.0.1	localhost easyauth.com easyauth-client.com
+```
+
+!!! TIP "Troubleshooting"
+    Use browser developer tools to view browser console logs 
+    Ctrl + shift + i 
+
+![](images/oauth-error.png)
+
+Updating Browser Path to overriden host path, login should then be possible if correctly configured in google console
