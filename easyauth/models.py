@@ -69,6 +69,10 @@ class Email(BaseModel):
     recipients: Union[list, str]
     email_body: str
     
+class OauthConfig(BaseModel):
+    client_id: str
+    enabled: bool
+    default_groups: list
 
 async def tables_setup(server):
     log = server.log
@@ -315,3 +319,33 @@ async def tables_setup(server):
         'activation_code', 
         cache_enabled=True
     )
+
+    await db.create_table(
+        'oauth', 
+        [
+            ['provider', 'str', 'UNIQUE NOT NULL'],
+            ['client_id', 'str'],
+            ['default_groups', 'str'],
+            ['enabled', 'bool']
+        ],
+        'provider',
+        cache_enabled=True
+    )
+    easyauth = await db.tables['oauth'].select(
+        '*',
+        where={'provider': 'easyauth'}
+    )
+    if not easyauth:
+        await db.tables['oauth'].insert(
+            provider='easyauth',
+            client_id='EASYAUTH',
+            default_groups={'default_groups': []},
+            enabled=True
+        )
+        await db.tables['oauth'].insert(
+            provider='google',
+            client_id='',
+            default_groups={'default_groups': []},
+            enabled=False
+        )
+

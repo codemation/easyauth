@@ -1,9 +1,10 @@
 from copy import deepcopy
+from re import sub
 from easyadmin import Admin, buttons, forms, html_input, row, card, modal, admin
 from easyadmin.elements import scripts
 from easyadmin.pages import register
 from fastapi.responses import HTMLResponse
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 
 async def frontend_setup(server):
 
@@ -20,37 +21,37 @@ async def frontend_setup(server):
                 'items': [
                     {
                         'name':  'Users',
-                        'href': '#',#f'{admin_prefix}/users',
+                        'href': f'{admin_prefix}/users',
                         'icon': 'user',
-                        'onclick': f"OnClickUpdate('{admin_prefix}/users', 'page-top')",
+                        #'onclick': f"OnClickUpdate('{admin_prefix}/users', 'page-top')",
                         'items': []
                     },
                     {
                         'name':  'Services',
-                        'href': '#',#f'{admin_prefix}/services',
+                        'href': f'{admin_prefix}/services',
                         'icon': 'robot',
-                        'onclick': f"OnClickUpdate('{admin_prefix}/services', 'page-top')",
+                        #'onclick': f"OnClickUpdate('{admin_prefix}/services', 'page-top')",
                         'items': []
                     },
                     {
                         'name':  'Groups',
-                        'href': '#',#f'{admin_prefix}/groups',
+                        'href': f'{admin_prefix}/groups',
                         'icon': 'users',
-                        'onclick': f"OnClickUpdate('{admin_prefix}/groups', 'page-top')",
+                        #'onclick': f"OnClickUpdate('{admin_prefix}/groups', 'page-top')",
                         'items': []
                     },
                     {
                         'name':  'Roles',
-                        'href': '#',#f'{admin_prefix}/roles',
+                        'href': f'{admin_prefix}/roles',
                         'icon': 'bezier-curve',
-                        'onclick': f"OnClickUpdate('{admin_prefix}/roles', 'page-top')",
+                        #'onclick': f"OnClickUpdate('{admin_prefix}/roles', 'page-top')",
                         'items': []
                     },
                     {
                         'name':  'Actions',
-                        'href': '#',#f'{admin_prefix}/actions',
+                        'href': f'{admin_prefix}/actions',
                         'icon': 'id-badge',
-                        'onclick': f"OnClickUpdate('{admin_prefix}/actions', 'page-top')",
+                        #'onclick': f"OnClickUpdate('{admin_prefix}/actions', 'page-top')",
                         'items': []
                     }
                 ]
@@ -59,9 +60,9 @@ async def frontend_setup(server):
                 'items': [
                     {
                         'name':  'Tokens Issued',
-                        'href': '#',#f'{admin_prefix}/tokens',
+                        'href': f'{admin_prefix}/tokens',
                         'icon': 'key',
-                        'onclick': f"OnClickUpdate('{admin_prefix}/tokens', 'page-top')",
+                        #'onclick': f"OnClickUpdate('{admin_prefix}/tokens', 'page-top')",
                         'items': []
                     }
                 ]
@@ -70,9 +71,33 @@ async def frontend_setup(server):
                 'items': [
                     {
                         'name':  'Email',
-                        'href': '#',#f'{admin_prefix}/email',
+                        'href': f'{admin_prefix}/email',
                         'icon': 'envelope',
-                        'onclick': f"OnClickUpdate('{admin_prefix}/email', 'page-top')",
+                        #'onclick': f"OnClickUpdate('{admin_prefix}/email', 'page-top')",
+                        'items': [
+                        ]
+                    }
+                ]
+            },
+            {
+                'items': [
+                    {
+                        'name':  'Identity Providers',
+                        'href': f'{admin_prefix}/oauth',
+                        'icon': 'passport',
+                        #'onclick': f"OnClickUpdate('{admin_prefix}/oauth', 'page-top')",
+                        'items': [
+                        ]
+                    }
+                ]
+            },
+            {
+                'items': [
+                    {
+                        'name':  'APIs',
+                        'href': f'/docs',
+                        'icon': 'flag',
+                        #'onclick': f"OnClickUpdate('/docs', 'page-top')",
                         'items': [
                         ]
                     }
@@ -86,13 +111,14 @@ async def frontend_setup(server):
         alert='Ready to Leave',
         body=buttons.get_button(
             'Go Back',
-            color='success', 
+            color='success',
             href=f'{admin_prefix}/'
-        ) + 
+        ) +
+        scripts.get_google_signout_script() + 
         buttons.get_button(
             'Log out',
             color='danger',
-            href=f'/logout'
+            onclick='signOut()'
         ),
         footer='',
         size='sm'
@@ -132,7 +158,8 @@ async def frontend_setup(server):
             sidebar=server.admin.sidebar,
             body=await get_user_details(username, groups),
             current_user=access_token['permissions']['users'][0],
-            modals=logout_modal
+            modals=logout_modal + scripts.get_onclick_form_submit_script(transform=True),
+            google=await server.get_google_oauth_client_id()
         )
         return user_page
 
@@ -155,7 +182,8 @@ async def frontend_setup(server):
             sidebar=server.admin.sidebar,
             body=await get_user_details(username, groups),
             current_user=access_token['permissions']['users'][0],
-            modals=logout_modal
+            modals=logout_modal,
+            google=await server.get_google_oauth_client_id()
         )
         return user_page
 
@@ -163,9 +191,9 @@ async def frontend_setup(server):
     async def get_user_details(username: str, all_groups: list):
 
         details = await server.get_user_details(username)
-
+        username_normalized = sub('[@.]', '', username)
         update_form = forms.get_form(
-            f'Update {username}',
+            f'Update {username_normalized}',
             [
                 html_input.get_text_input("username", value=username),
                 html_input.get_text_input("password", input_type='password') 
@@ -183,7 +211,7 @@ async def frontend_setup(server):
             submit_name='update user',
             method='post',
             action=f'/auth/user/{username}',
-            transform_id=f'Update{username}',
+            transform_id=f'Update{username_normalized}',
         )
         groups, roles, actions = [], [], [] 
         if 'groups' in details['permissions']:
@@ -254,18 +282,20 @@ async def frontend_setup(server):
 
         for ind, user in enumerate(users):
             username = user['username']
+            username_normalized = sub('[@.]', '', username)
             modals.append(
                 modal.get_modal(
-                    f'delete{username}Modal',
+                    f'delete{username_normalized}Modal',
                     alert='',
                     body=forms.get_form(
-                        f'Delete {account_type} {username}',
+                        f'Delete {account_type} {username_normalized}',
                         [
                             buttons.get_button(
                                 'Go Back',
                                 color='success', 
                                 href=f'{admin_prefix}/'
-                        )],
+                            )
+                        ],
                         submit_name=f'delete {account_type}',
                         method='delete',
                         action=f'/auth/user?username={username}'
@@ -276,7 +306,7 @@ async def frontend_setup(server):
             )
             modals.append(
                 modal.get_modal(
-                    f'view_{username}',
+                    f'view_{username_normalized}',
                     alert='',
                     body=await get_user_details(username, groups),
                     footer='',
@@ -285,10 +315,10 @@ async def frontend_setup(server):
             if account_type == 'service':
                 modals.append(
                     modal.get_modal(
-                        f'generate{username}TokenModal',
+                        f'generate{username_normalized}TokenModal',
                         alert='',
                         body=forms.get_form(
-                            f'Generate {username} token',
+                            f'Generate {username_normalized} token',
                             [
                                 buttons.get_button(
                                     'Go Back',
@@ -298,7 +328,7 @@ async def frontend_setup(server):
                             submit_name=f'Create Token',
                             method='get',
                             action=f'/auth/serviceaccount/token/{username}',
-                            transform_id=f'Generate{username}token'
+                            transform_id=f'Generate{username_normalized}token'
                         ),
                         footer='',
                         size='sm'
@@ -312,11 +342,11 @@ async def frontend_setup(server):
                 buttons.get_split_button(
                     f'view/edit',
                     icon='eye',
-                    modal=f'view_{username}'
+                    modal=f'view_{username_normalized}'
                 ) + 
                 buttons.get_split_button(
                     f'delete', 
-                    modal=f'delete{username}Modal', 
+                    modal=f'delete{username_normalized}Modal', 
                     color='danger',
                     icon='trash'
                 )
@@ -324,7 +354,7 @@ async def frontend_setup(server):
             if account_type == 'service':
                 token_button = buttons.get_split_button(
                         f'generate token', 
-                        modal=f'generate{username}TokenModal', 
+                        modal=f'generate{username_normalized}TokenModal', 
                         color='warning',
                         icon='key'
                     )
@@ -342,7 +372,8 @@ async def frontend_setup(server):
             users_table if len(users_table) > 0 else users_default,
             current_user=access_token['permissions']['users'][0],
             modals=''.join(modals),
-            above=scripts.get_onclick_script(),
+            above=scripts.get_onclick_script() + 
+            scripts.get_onclick_form_submit_script(transform=True),
             below=forms.get_form(
                 f'Create {account_type}',
                 [
@@ -359,7 +390,8 @@ async def frontend_setup(server):
                 submit_name=f'create {account_type}',
                 method='put',
                 action=f'/auth/{account_type}'
-            )
+            ),
+            google=await server.get_google_oauth_client_id()
         )
 
     async def get_group_details(group_name: str):
@@ -481,7 +513,8 @@ async def frontend_setup(server):
             sidebar=server.admin.sidebar,
             body=await get_group_details(group_name),
             current_user=access_token['permissions']['users'][0],
-            modals=logout_modal
+            modals=logout_modal,
+            google=await server.get_google_oauth_client_id()
         )
         return group_page
 
@@ -568,7 +601,8 @@ async def frontend_setup(server):
                 submit_name='create group',
                 method='put',
                 action='/auth/group'
-            )
+            ),
+            google=await server.get_google_oauth_client_id()
         )
         return admin_table
 
@@ -687,7 +721,8 @@ async def frontend_setup(server):
             sidebar=server.admin.sidebar,
             body=await get_role_details(role_name),
             current_user=access_token['permissions']['users'][0],
-            modals=logout_modal
+            modals=logout_modal,
+            google=await server.get_google_oauth_client_id()
         )
         return role_page
         
@@ -768,7 +803,8 @@ async def frontend_setup(server):
                 submit_name='create role',
                 method='put',
                 action='/auth/role'
-            )
+            ),
+            google=await server.get_google_oauth_client_id()
         )
         _roles = await server.auth_roles.select('*')
 
@@ -890,7 +926,8 @@ async def frontend_setup(server):
             sidebar=server.admin.sidebar,
             body=await get_action_details(action),
             current_user=access_token['permissions']['users'][0],
-            modals=logout_modal
+            modals=logout_modal,
+            google=await server.get_google_oauth_client_id()
         )
         return action_page
 
@@ -955,7 +992,8 @@ async def frontend_setup(server):
                 submit_name='create permission',
                 method='put',
                 action='/auth/permissions'
-            )
+            ),
+            google=await server.get_google_oauth_client_id()
         )
     
 
@@ -1042,7 +1080,7 @@ async def frontend_setup(server):
         for token in tokens:
             token_number = token['number']
             token_id = tokens_raw[token_number]['token_id']
-            token_user = token['username']
+            token_user = sub('[@.]', '', token['username'])
             modals.append(modal.get_modal(
                     f'revoke{token_number}Modal',
                     alert='',
@@ -1096,7 +1134,8 @@ async def frontend_setup(server):
             current_user=access_token['permissions']['users'][0],
             modals=''.join(modals),
             above="",
-            below=''
+            below='',
+            google=await server.get_google_oauth_client_id()
         )
 
     @admin_gui.get('/email', response_class=HTMLResponse, send_token=True, include_in_schema=False)
@@ -1160,12 +1199,17 @@ async def frontend_setup(server):
                 modal=f'SendTestEmailModal'
             ),
             current_user=access_token['permissions']['users'][0],
-            modals=''.join(modals)
+            modals=''.join(modals),
+            google=await server.get_google_oauth_client_id() 
         )
 
     @server.server.get('/login', response_class=HTMLResponse, tags=['Login'])
-    async def admin_login():
-        return server.admin.login_page(welcome_message='Login to begin')
+    async def admin_login(request: Request):
+        # present enabled oauth login options
+        return await server.get_login_page(
+            message='Login to begin',
+            request=request
+        )
 
     @server.server.get('/register', response_class=HTMLResponse, tags=['User'])
     async def admin_register():
@@ -1198,4 +1242,46 @@ async def frontend_setup(server):
                 action="/auth/user/activate",
                 transform_id='ActivateUser'
             )
+        )
+
+    @admin_gui.get('/oauth', response_class=HTMLResponse, send_token=True, include_in_schema=False)
+    async def admin_oauth(access_token=None):
+
+        groups = await server.auth_groups.select('group_name')
+        groups = deepcopy([group['group_name'] for group in groups])
+
+        oauth_config = await server.db.tables['oauth'].select('*')
+
+        oauth_forms = []
+
+        for config in oauth_config:
+            provider = config['provider']
+            default_groups = html_input.get_checkbox(
+                'default_groups', 
+                [(group, group in config['default_groups']['default_groups']) for group in deepcopy(groups)],
+                size=12,
+                unique_id=provider
+            )
+
+            oauth_forms.append(
+                forms.get_form(
+                    f"{provider} OAuth",
+                    [
+                        html_input.get_text_input("client_id", value=config['client_id']),
+                        html_input.get_checkbox('enabled', [('enabled', config['enabled'])]),
+                        default_groups,
+                    ],
+                    submit_name=f'Update {provider} OAuth',
+                    method='post',
+                    action=f'/auth/oauth/{provider}',
+                    transform_id=f'{provider}OAuth'
+                )
+            )
+
+        return server.admin.admin_page(
+            'Identity Providers',
+            body=''.join(oauth_forms),
+            current_user=access_token['permissions']['users'][0],
+            modals=logout_modal,
+            google=await server.get_google_oauth_client_id()
         )

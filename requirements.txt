@@ -6,9 +6,10 @@ fastapi
 uvicorn
 pyjwt
 python-multipart
-easyadmin>=0.145
+easyadmin>=0.165
 fastapi-mail==0.3.7
 aiohttp
 gunicorn
 email_validator
 easyrpc
+google-api-python-client
