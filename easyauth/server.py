@@ -11,21 +11,37 @@ import asyncio
 import subprocess
 from typing import Any
 from starlette.status import HTTP_302_FOUND
+
 from fastapi import FastAPI, Depends, HTTPException, Request, APIRouter
 from fastapi.security import OAuth2PasswordBearer
 from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.encoders import jsonable_encoder
+
 from makefun import wraps
 from inspect import signature, Parameter
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
 from easyrpc.server import EasyRpcServer
-from easyadmin import card
+
+from google.oauth2 import id_token
+from google.auth.transport import requests
 
 from easyauth.db import database_setup
-from easyauth.models import tables_setup
+from easyauth.models import tables_setup, User
 from easyauth.api import api_setup
 from easyauth.frontend import frontend_setup
 from easyauth.router import EasyAuthAPIRouter
+from easyauth.exceptions import (
+    GoogleOauthNotEnabledOrConfigured,
+    GoogleOauthHeaderMalformed
+)
+from easyadmin.elements import (
+    scripts,
+    modal,
+    buttons,
+    card
+)
+from easyadmin.pages import admin
 
 class EasyAuthServer:
     def __init__(
@@ -55,7 +71,6 @@ class EasyAuthServer:
         self.debug = debug
         level = None if not self.debug else 'DEBUG'
         self.setup_logger(logger=self.log, level=level)
-
 
         # extra routers
         self.api_routers = []
@@ -141,8 +156,9 @@ class EasyAuthServer:
                             status_code=404
                         )
                     response = HTMLResponse(
-                        self.admin.login_page(
-                            welcome_message='Login Required'
+                        await self.get_login_page(
+                            message='Login Required',
+                            request=request
                         ),
                         status_code=401
                     )
@@ -150,7 +166,7 @@ class EasyAuthServer:
                     response.set_cookie('ref', request.__dict__['scope']['path'])
                     
             if response.status_code == 500:
-                log.error(f"Internal error - 500 - with request: {request.__dict__}")
+                self.log.error(f"Internal error - 500 - with request: {request.__dict__}")
             return response
 
         @self.rpc_server.origin(namespace='admin')
@@ -280,6 +296,14 @@ class EasyAuthServer:
                 'public_rsa': auth_server._privkey.export_public()
             }
 
+        @rpc_server.origin(namespace='easyauth')
+        async def get_identity_providers():
+            return await auth_server.get_identity_providers()
+        
+        @rpc_server.origin(namespace='easyauth')
+        async def generate_google_oauth_token(auth_code):
+            return await auth_server.generate_google_oauth_token(auth_code=auth_code)
+
         if auth_server.leader:
             await asyncio.sleep(1)
             valid_tokens = await auth_server.auth_tokens.select('token_id')
@@ -347,6 +371,55 @@ class EasyAuthServer:
             api_router
         )
         return api_router
+    async def get_403_page(self):
+        body = """
+            <div class="text-center">
+                <div class="error mx-auto" data-text="Forbidden">Forbidden</div>
+                <p class="text-gray-500 mb-0">You dont have permission to view this</p>
+                <a href="/login">&larr; Back to Login</a>
+            </div>
+        """
+        logout_modal = modal.get_modal(
+            f'logoutModal',
+            alert='Ready to Leave',
+            body=buttons.get_button(
+                'Go Back',
+                color='success',
+                href=f'{self.ADMIN_PREFIX}/'
+            ) +
+            scripts.get_google_signout_script() + 
+            buttons.get_button(
+                'Log out',
+                color='danger',
+                onclick='signOut()'
+            ),
+            footer='',
+            size='sm'
+        )
+        return admin.get_admin_page(
+            name='', 
+            sidebar=self.admin.sidebar,
+            body='',
+            topbar_extra=body,
+            current_user='',
+            modals=logout_modal,
+            google=await self.get_google_oauth_client_id()
+        )
+
+    async def get_login_page(self, message, request: Request = None, **kwargs):
+        redirect_ref = f'{self.ADMIN_PREFIX}'
+        if request and 'ref' in request.cookies:
+            redirect_ref = request.cookies['ref']
+            
+        identity_providers = await self.get_identity_providers()
+
+        return self.admin.login_page(
+            welcome_message=message,
+            login_action='/login',
+            **identity_providers,
+            google_redirect_url = redirect_ref
+        )
+
     async def email_setup(self,
         username: str,
         password: str,
@@ -433,7 +506,6 @@ class EasyAuthServer:
             asyncio.create_task(email_send())
         else:
             result =  await email_send()
-            print(result)
         return {"message": "email sent"}
 
     def cors_setup(self):
@@ -489,8 +561,6 @@ class EasyAuthServer:
             token=permissions
         )
 
-        #with open(f"{os.environ['KEY_PATH']}/{os.environ['KEY_NAME']}.key", 'r') as key_path:
-        #    private_key = key_path.readline()
         token = jwt.generate_jwt(
             payload, 
             self._privkey,
@@ -515,10 +585,6 @@ class EasyAuthServer:
             ['RS256']
         )
     def encode(self, minutes=60, days=0, **kw):
-        #try:
-        #    return pyjwt.encode(kw, secret, algorithm='HS256')
-        #except Exception as e:
-        #    self.log.exception(f"error encoding {kw} using {secret}")
         encoded = jwt.generate_jwt(
             kw,
             self._privkey,
@@ -548,6 +614,100 @@ class EasyAuthServer:
 
     def decode_password(self, encoded, auth):
         return self.decode(encoded, auth)
+
+    async def get_google_oauth_client_id(self):
+        client_id = await self.db.tables['oauth'].select(
+            'client_id',
+            where={'provider': 'google'}
+        )
+
+        return client_id[0]['client_id'] if client_id else ''
+
+    async def get_identity_providers(self):
+        oauth_config = await self.db.tables['oauth'].select(
+            '*',
+            where={
+                'enabled': True
+
+            }
+        )
+
+        identity_providers = {
+            idp['provider']: idp['client_id'] 
+            for idp in oauth_config if not idp['provider'] == 'easyauth'
+        }
+        return identity_providers
+
+    async def generate_google_oauth_token(self, request = None, auth_code=None):
+        """
+        Generate a token for an existing User and/or create user using
+        provided oauth2 token
+        """
+        # verify google oath is configured
+        oauth_config = await self.db.tables['oauth'].select(
+            '*',
+            where={
+                'provider': 'google',
+                'enabled': True
+            }
+        )
+
+        if not oauth_config:
+            raise GoogleOauthNotEnabledOrConfigured
+        oauth_config = oauth_config[0]
+
+        if not auth_code:
+            # verify OAuth2 type
+            google_client_type = request.headers.get("X-Google-OAuth2-Type")
+
+            if google_client_type == 'client':
+                body_bytes = await request.body()
+                auth_code = jsonable_encoder(body_bytes)
+            else:
+                raise GoogleOauthHeaderMalformed
+
+        try:
+            idinfo = id_token.verify_oauth2_token(
+                auth_code, 
+                requests.Request(), 
+                oauth_config['client_id']
+            )
+
+            if idinfo['email'] and idinfo['email_verified']:
+                email = idinfo.get('email')
+
+            else:
+                raise HTTPException(status_code=400, detail="Unable to validate social login")
+
+        except:
+            raise HTTPException(status_code=400, detail="Unable to validate social login")
+
+        # verify user exists
+        user = await self.auth_users.select('*', where={'email': email})
+        if not user:
+            # does not exist, create
+            result = await self.register_user(
+                {
+                    'username': email,
+                    'email address': email,
+                    'full name': f"{idinfo['given_name']} {idinfo['family_name']}",
+                    'email': email,
+                    'password': '',
+                    'repeat password': '',
+                    'groups': oauth_config['default_groups']['default_groups']
+                }
+            )
+            if 'Activation email sent to' in result:
+                return result
+
+            # no activation was required
+            user = await self.auth_users.select('*', where={'email': email})
+
+        permissions = await self.get_user_permissions(user[0]['username'])
+        return await self.issue_token(permissions)
+
+        
+
 
     async def validate_user_pw(self, username, password):
         user = await self.auth_users.select('*', where={'username': username})
@@ -683,8 +843,9 @@ class EasyAuthServer:
                 if token ==  'NO_TOKEN':
                     if response_class is HTMLResponse or 'text/html' in request.headers['accept']:
                         response = HTMLResponse(
-                            self.admin.login_page(
-                                welcome_message='Login Required'
+                            await self.get_login_page(
+                                message='Login Required',
+                                request=request
                             ),
                             status_code=401
                         )
@@ -700,8 +861,9 @@ class EasyAuthServer:
                     self.log.error(f"error decoding token")
                     if response_class is HTMLResponse:
                         response = HTMLResponse(
-                            self.admin.login_page(
-                                welcome_message='Login Required'
+                            await self.get_login_page(
+                                message='Login Required',
+                                request=request
                             ),
                             status_code=401
                         )
@@ -727,10 +889,9 @@ class EasyAuthServer:
                 if not allowed:
                     if response_class is HTMLResponse:
                         response = HTMLResponse(
-                            self.admin.forbidden_page(),
+                            await self.get_403_page(), #self.admin.forbidden_page(),
                             status_code=403
                         )
-                        response.set_cookie('token', 'INVALID')
                         return response
                     raise HTTPException(
                         status_code=403, 

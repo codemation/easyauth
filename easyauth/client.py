@@ -9,14 +9,23 @@ from starlette.status import HTTP_302_FOUND
 from fastapi import FastAPI, Depends, HTTPException, Form, Response, Request
 from fastapi.security import OAuth2PasswordBearer
 from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.encoders import jsonable_encoder
 from makefun import wraps
 from inspect import signature, Parameter
 from easyauth.models import ActivationCode
 from easyadmin import Admin
-from easyadmin.pages import register
-from easyadmin.elements import forms, html_input
 from easyauth.router import EasyAuthAPIRouter
 from easyrpc.server import EasyRpcServer
+
+from easyadmin.elements import (
+    scripts,
+    modal,
+    buttons,
+    card,
+    forms,
+    html_input
+)
+from easyadmin.pages import admin, register
 
 
 class EasyAuthClient:
@@ -114,7 +123,7 @@ class EasyAuthClient:
             default_permissions
         )
         await asyncio.sleep(5)
-
+        
         auth_server.store = await rpc_server['global_store']['get_store_data']()
 
         async def store_data(action: str, store: str, key: str, value: Any = None):
@@ -141,7 +150,10 @@ class EasyAuthClient:
 
         @server.get('/login', response_class=HTMLResponse, include_in_schema=False)
         async def login(request: Request, response: Response):
-            return auth_server.get_login_page("Login to Begin")
+            return await auth_server.get_login_page(
+                message="Login to Begin",
+                request=request
+            )
         
         @server.post('/login/re', response_class=HTMLResponse, include_in_schema=False)
         async def login(request: Request, response: Response):
@@ -165,7 +177,10 @@ class EasyAuthClient:
             )
             if not 'access_token' in token:
                 message = 'invalid username / password' if 'invalid username / password' in token else token
-                return auth_server.get_login_page(message)
+                return await auth_server.get_login_page(
+                    message=message,
+                    request=request
+                )
             response.set_cookie('token', token['access_token'])
             response.status_code=200
             
@@ -223,6 +238,26 @@ class EasyAuthClient:
             return await auth_server.rpc_server['easyauth']['activate_user'](
                 activation_code.dict()
             )
+        @server.post('/auth/token/oauth/google', include_in_schema=False)
+        async def create_google_oauth_token(request: Request, response: Response):
+            google_client_type = request.headers.get("X-Google-OAuth2-Type")
+
+            if google_client_type == 'client':
+                body_bytes = await request.body()
+                auth_code = jsonable_encoder(body_bytes)
+            token = await auth_server.rpc_server['easyauth']['generate_google_oauth_token'](
+                auth_code
+            )
+
+            response.set_cookie('token', token)
+
+            redirect_ref = '/'
+
+            if 'ref' in request.cookies:
+                redirect_ref = request.cookies['ref']
+                response.delete_cookie('ref')
+
+            return RedirectResponse(redirect_ref, headers=response.headers, status_code=HTTP_302_FOUND)
 
         @server.get("/logout", tags=['Login'], response_class=HTMLResponse, include_in_schema=False)
         async def logout_page(
@@ -291,11 +326,54 @@ class EasyAuthClient:
         )
         return api_router
 
-    def get_login_page(self, message):
+    async def get_403_page(self):
+        body = """
+            <div class="text-center">
+                <div class="error mx-auto" data-text="Forbidden">Forbidden</div>
+                <p class="text-gray-500 mb-0">You dont have permission to view this</p>
+                <a href="/login">&larr; Back to Login</a>
+            </div>
+        """
+        logout_modal = modal.get_modal(
+            f'logoutModal',
+            alert='Ready to Leave',
+            body=buttons.get_button(
+                'Go Back',
+                color='success',
+                href=f'/'
+            ) +
+            scripts.get_google_signout_script() + 
+            buttons.get_button(
+                'Log out',
+                color='danger',
+                onclick='signOut()'
+            ),
+            footer='',
+            size='sm'
+        )
+        identity_providers = await self.rpc_server['easyauth']['get_identity_providers']()
+        return self.admin.admin_page(
+            name='',
+            body='',
+            topbar_extra=body,
+            current_user='',
+            modals=logout_modal,
+            **identity_providers
+        )
+
+    async def get_login_page(self, message, request: Request = None, **kwargs):
+        redirect_ref = '/'
+        if request and 'ref' in request.cookies:
+            redirect_ref = request.cookies['ref']
+        identity_providers = await self.rpc_server['easyauth']['get_identity_providers']()
+
         return self.admin.login_page(
             welcome_message=message,
-            login_action='/login'
+            login_action='/login',
+            **identity_providers,
+            google_redirect_url = redirect_ref
         )
+
     def load_env_from_file(self, file_path):
         self.log.warning(f"loading env vars from {file_path}")
         with open(file_path, 'r') as json_env:
@@ -386,8 +464,9 @@ class EasyAuthClient:
                 if token ==  'NO_TOKEN':
                     if response_class is HTMLResponse or 'text/html' in request.headers['accept']:
                         response = HTMLResponse(
-                            self.admin.login_page(
-                                welcome_message='Login Required'
+                            await self.get_login_page(
+                                message='Login Required',
+                                request=request
                             ),
                             status_code=401
                         )
@@ -401,8 +480,9 @@ class EasyAuthClient:
                     self.log.exception(f"error decoding token")
                     if response_class is HTMLResponse:
                         response = HTMLResponse(
-                            self.admin.login_page(
-                                welcome_message='Login Required'
+                            await self.get_login_page(
+                                message='Login Required',
+                                request=request
                             ),
                             status_code=401
                         )
@@ -430,10 +510,10 @@ class EasyAuthClient:
                 if not allowed:
                     if response_class is HTMLResponse or 'text/html' in request.headers['accept']:
                         response = HTMLResponse(
-                            self.admin.forbidden_page(),
+                            await self.get_403_page(), #self.admin.forbidden_page(),
                             status_code=403
                         )
-                        response.set_cookie('token', 'INVALID')
+                        #response.set_cookie('token', 'INVALID')
                         return response
                     raise HTTPException(
                         status_code=403, 

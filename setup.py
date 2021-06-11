@@ -4,16 +4,15 @@ BASE_REQUIREMENTS = [
     'makefun==1.9.5', 'PyJWT==2.0.0', 
     'python-jwt==3.3.0', 'fastapi', 
     'uvicorn', 'python-multipart==0.0.5', 
-    'easyadmin>=0.150', 'easyrpc>=0.241',
-    
+    'easyadmin>=0.165', 'easyrpc>=0.241',
 ]
 SERVER_REQUIREMENTS = [
     'aiopyql>=0.357', 'cryptography', 
     'bcrypt==3.2.0', 'uvloop', 
     'example', 'httptools',
     'gunicorn', 'fastapi-mail==0.3.7',
-    'email_validator'
-    ]
+    'email_validator', 'google-api-python-client'
+]
 CLIENT_REQUIREMENTS = []
 
 with open("README.md", "r") as fh:

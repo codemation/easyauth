@@ -9,7 +9,8 @@ from easyauth.models import (
     Service, Group, 
     Role, Permission, 
     EmailConfig, Email,
-    EmailSetup, ActivationCode
+    EmailSetup, ActivationCode,
+    OauthConfig
 )
 from easyauth.exceptions import (
     DuplicateUserError,
@@ -149,6 +150,54 @@ async def api_setup(server):
     async def revoke_access_token(token_id: str):
         await server.revoke_token(token_id)
         return f"token revoked"
+    
+
+    @api_router.get('/auth/oauth')
+    async def get_oauth_providers():
+        return await server.db.tables['oauth'].select(
+            '*',
+        )
+
+    @api_router.post('/auth/oauth/{provider}')
+    async def configure_oauth_provider(provider: str, config: OauthConfig):
+        # check for existing config
+        config = config.dict()
+        oauth_config = await server.db.tables['oauth'].select(
+            '*',
+            where={
+                'provider': provider
+            }
+        )
+        if oauth_config:
+            # update
+            await server.db.tables['oauth'].update(
+                client_id=config['client_id'],
+                enabled='enabled' in config['enabled'],
+                default_groups={'default_groups': config['default_groups']},
+                where={'provider': provider}
+            )
+            return f"{provider} OAuth Configured"
+        await server.db.tables['oauth'].insert(
+            provider=provider,
+            client_id=config['client_id'],
+            enabled='enabled' in config['enabled'],
+            default_groups={'default_groups': config['default_groups']}
+        )
+        return f"{provider} OAuth Configured"
+
+    @server.server.post('/auth/token/oauth/google', include_in_schema=False)
+    async def create_google_oauth_token_api(request: Request, response: Response):
+        token = await server.generate_google_oauth_token(request)
+        # add token to cookie
+        response.set_cookie('token', token)
+
+        redirect_ref = server.ADMIN_PREFIX
+
+        if 'ref' in request.cookies:
+            redirect_ref = request.cookies['ref']
+            response.delete_cookie('ref')
+
+        return RedirectResponse(redirect_ref, headers=response.headers, status_code=HTTP_302_FOUND)
 
 
     @server.server.post('/auth/token/refresh', response_model=Token, tags=['Token'])
@@ -201,7 +250,7 @@ async def api_setup(server):
                 "token_type": "bearer"
             }
         raise InvalidUsernameOrPassword
-        
+    server.generate_auth_token = generate_auth_token
 
     @server.server.post('/auth/token', response_model=Token, tags=['Token'])
     async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
@@ -242,10 +291,9 @@ async def api_setup(server):
         user = await server.validate_user_pw(username, password)
         
         if not user:
-            return server.admin.login_page(welcome_message="logged out - Login Required")
-            raise HTTPException(
-                status_code=401, 
-                detail="unable to authenticate with provided credentials"
+            return await server.get_login_page(
+                message="logged out - Login Required",
+                request=request
             )
 
         # get user permissions
@@ -306,7 +354,7 @@ async def api_setup(server):
             email=user_info['email address']
         )
 
-        result = await _create_user(user)
+        result = await __create_user(user)
         server.log.warning(f"user {user_info['username']} created after successful activation")
         return f"{user_info['username']} activated"
 
@@ -321,7 +369,15 @@ async def api_setup(server):
         registers a new user, if email is configured & enabled 
         sends activation email for user. 
         """
-        print(f"register_user: user_info {user_info}")
+        # check default groups assignment
+        if not 'groups' in user_info or not user_info['groups']:
+            default_groups = await server.db.tables['oauth'].select(
+                '*',
+                where={'provider': 'easyauth'}
+            )
+            if default_groups[0]['default_groups']['default_groups']:
+                if default_groups[0]['enabled']:
+                    user_info['groups'] = default_groups[0]['default_groups']['default_groups']
 
         try:
             register_user = RegisterUser(
@@ -335,7 +391,8 @@ async def api_setup(server):
                 username=user_info['username'],
                 password=user_info['password'],
                 full_name=user_info['full name'],
-                email=user_info['email address']
+                email=user_info['email address'],
+                groups=user_info['groups'] if 'groups' in user_info else []
             )
         except ValueError as e:
             raise HTTPException(
@@ -361,7 +418,6 @@ async def api_setup(server):
             encoded_data = server.encode(user_info=user_info)
 
             # insert into unactivated users
-            #breakpoint()
 
             result = await server.db.tables['pending_users'].insert(
                 activation_code=activation_code,
@@ -373,17 +429,16 @@ async def api_setup(server):
                 "New User Activation",
                 f"New User Activation Code: {activation_code}",
                 user_info['email address'],
-
             )
             return f"Activation email sent to {user_info['email address']}"
-
-        return await _create_user(user)
+        return await __create_user(user)
+    server.register_user = register_user
 
     @api_router.put('/auth/user', status_code=201, tags=['Users'])
     async def create_user(user: User):
-        return await _create_user(user)
+        return await __create_user(user)
         
-    async def _create_user(user: User):
+    async def __create_user(user: User):
         user = dict(user)
 
         if not user['groups']:
@@ -406,6 +461,8 @@ async def api_setup(server):
 
         # trigger some activation email later?
         return f"{user['username']} created"
+    
+    server.create_user = __create_user
         
     @api_router.put('/auth/service', status_code=201, actions=['CREATE_USER'], tags=['Users'])
     async def create_service(service: Service):
@@ -647,7 +704,6 @@ async def api_setup(server):
 
     @api_router.post('/email/setup', tags=['Email'])
     async def setup_email_cofiguration(config: EmailSetup):
-        print(config)
         return await server.email_setup(
             username=config.MAIL_USERNAME,
             password=config.MAIL_PASSWORD,

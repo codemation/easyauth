@@ -85,8 +85,9 @@ class EasyAuthAPIRouter:
                 if token ==  'NO_TOKEN':
                     if response_class is HTMLResponse or 'text/html' in request.headers['accept']:
                         response = HTMLResponse(
-                            self.parent.admin.login_page(
-                                welcome_message='Login Required'
+                            await self.parent.get_login_page(
+                                message='Login Required',
+                                request=request
                             ),
                             status_code=401
                         )
@@ -100,8 +101,9 @@ class EasyAuthAPIRouter:
                     self.parent.log.exception(f"error decoding token")
                     if response_class is HTMLResponse:
                         response = HTMLResponse(
-                            self.parent.admin.login_page(
-                                welcome_message='Login Required'
+                            await self.parent.get_login_page(
+                                message='Login Required',
+                                request=request
                             ),
                             status_code=401
                         )
@@ -128,10 +130,10 @@ class EasyAuthAPIRouter:
                 if not allowed:
                     if response_class is HTMLResponse or 'text/html' in request.headers['accept']:
                         response = HTMLResponse(
-                            self.parent.admin.forbidden_page(),
+                            await self.parent.get_403_page(),
                             status_code=403
                         )
-                        response.set_cookie('token', 'INVALID')
+                        #response.set_cookie('token', 'INVALID')
                         return response
                     raise HTTPException(
                         status_code=403, 
