@@ -215,3 +215,34 @@ An EasyAuthServer may be configured to use an SMTP server. The EasyAuthServer an
 ![](images/activate_gui.png)
 !!! TIP
     Default endpoints for activate exist at /activate 
+
+### Identity Providers
+Identity providers configuration is provided to allow third party authentications services to integrate within EasyAuth permissions. 
+
+#### API
+![](images/oauth_api.png)
+
+#### Default Permissions 
+<b>default_groups</b> provides a means to automatically assign new users to a group wether via /register or google login. 
+
+#### EasyAuth
+
+![](images/easyauth_oauth_gui.png)
+
+#### Google 
+EasyAuth can be enabled to support registering / login from authenticated Google users
+
+!!! TIP "Pre-Requisites"
+    * google client ID
+    * configured Authorized Javascript Origins & redirect URI's
+![](images/google_oauth_gui.png)
+
+!!! WARNING
+    If no <b>default_groups</b> are configured for the Google Identity Provider, new users will default to EasyAuth provider's <b>default_groups</b>. 
+
+
+##### Setup Google Client ID
+
+![](images/google_credentials.png)
+
+![](images/google_credentials_setup.png)
