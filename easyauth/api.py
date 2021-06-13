@@ -159,9 +159,9 @@ async def api_setup(server):
         )
 
     @api_router.post('/auth/oauth/{provider}')
-    async def configure_oauth_provider(provider: str, config: OauthConfig):
+    async def configure_oauth_provider(provider: str, config: Union[OauthConfig, dict]):
         # check for existing config
-        config = config.dict()
+        config = config.dict() if not isinstance(config, dict) else config
         oauth_config = await server.db.tables['oauth'].select(
             '*',
             where={
@@ -218,7 +218,6 @@ async def api_setup(server):
                 "token_type": "bearer"
             }
 
-            return token
         except Exception:
             server.log.exception(f"refresh_access_token error")
             raise HTTPException(
