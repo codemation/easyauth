@@ -882,7 +882,7 @@ class EasyAuthServer:
                         if value in token['permissions'][auth_type]:
                             allowed = True
                             break
-                if not token['id'] in self.store['tokens']:
+                if not token['token_id'] in self.store['tokens']:
                     self.log.error(f"token for user {token['permissions']['user'][0]} used is unknown / revoked")
                     allowed = False
                 
