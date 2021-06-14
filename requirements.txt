@@ -2,11 +2,11 @@ aiopyql>=0.357
 bcrypt==3.2.0
 python-jwt
 makefun==1.9.5
-fastapi
+fastapi>=0.65.2
 uvicorn
 pyjwt
 python-multipart
-easyadmin>=0.165
+easyadmin>=0.167
 fastapi-mail==0.3.7
 aiohttp
 gunicorn
