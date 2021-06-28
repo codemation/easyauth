@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ValidationError, root_validator, EmailStr
+from pydantic import BaseModel, root_validator, EmailStr
 from typing import Optional, Union
 
 class RegisterUser(BaseModel):

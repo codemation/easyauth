@@ -1,5 +1,4 @@
 import os
-import asyncio
 from easyrpc.server import EasyRpcServer
 from aiopyql.data import Database
 

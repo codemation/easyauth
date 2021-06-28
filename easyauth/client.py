@@ -21,11 +21,10 @@ from easyadmin.elements import (
     scripts,
     modal,
     buttons,
-    card,
     forms,
     html_input
 )
-from easyadmin.pages import admin, register
+from easyadmin.pages import register
 
 
 class EasyAuthClient:
