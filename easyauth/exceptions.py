@@ -1,5 +1,4 @@
 from fastapi import HTTPException
-from pydantic.networks import HttpUrl
 
 class DuplicateUserError(HTTPException):
     def __init__(self, username: str):

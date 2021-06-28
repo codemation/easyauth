@@ -3,16 +3,14 @@ import random, string
 import bcrypt
 import jwcrypto.jwk as jwk
 import python_jwt as jwt
-import jwt as pyjwt
 import datetime
 import json
 import logging
 import asyncio
 import subprocess
 from typing import Any
-from starlette.status import HTTP_302_FOUND
 
-from fastapi import FastAPI, Depends, HTTPException, Request, APIRouter
+from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordBearer
 from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,7 +25,7 @@ from google.oauth2 import id_token
 from google.auth.transport import requests
 
 from easyauth.db import database_setup
-from easyauth.models import tables_setup, User
+from easyauth.models import tables_setup
 from easyauth.api import api_setup
 from easyauth.frontend import frontend_setup
 from easyauth.router import EasyAuthAPIRouter
@@ -38,8 +36,7 @@ from easyauth.exceptions import (
 from easyadmin.elements import (
     scripts,
     modal,
-    buttons,
-    card
+    buttons
 )
 from easyadmin.pages import admin
 
@@ -143,7 +140,6 @@ class EasyAuthServer:
 
             return await call_next(request)
         
-
         @server.middleware('http')
         async def handle_401_403(request, call_next):
             response = await call_next(request)
@@ -224,6 +220,7 @@ class EasyAuthServer:
             await asyncio.sleep(5)
         else:
             auth_server.log.warning(f"member - db setup complete - starting manager proxies")
+            await asyncio.sleep(5)
 
         async def client_update(action: str, store: str, key: str, value: Any):
             """
@@ -600,7 +597,7 @@ class EasyAuthServer:
             self._privkey, 
             ['RS256']
         )
-        #return pyjwt.decode(token.encode('utf-8'), secret, algorithms='HS256')
+
     def generate_random_string(self, size: int) -> str:
         letters = string.ascii_lowercase
         return ''.join(random.choice(letters) for i in range(size))    

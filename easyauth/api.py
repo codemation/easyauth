@@ -1,5 +1,5 @@
 from typing import Optional, List, Union
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 from starlette.status import HTTP_302_FOUND
 from fastapi import HTTPException, Depends, Form, Response, Request
 from fastapi.responses import RedirectResponse, HTMLResponse
@@ -7,9 +7,9 @@ from fastapi.security import OAuth2PasswordRequestForm
 from easyauth.models import (
     User, RegisterUser, 
     Service, Group, 
-    Role, Permission, 
-    EmailConfig, Email,
-    EmailSetup, ActivationCode,
+    Role, Permission,
+    Email, EmailSetup, 
+    ActivationCode,
     OauthConfig
 )
 from easyauth.exceptions import (
@@ -17,7 +17,6 @@ from easyauth.exceptions import (
     InvalidActivationCode,
     InvalidUsernameOrPassword
 )
-from easyadmin.elements import card
 
 async def api_setup(server):
 
