@@ -4,6 +4,6 @@
     "ISSUER": "EasyAuth",
     "SUBJECT": "EasyAuth",
     "AUDIENCE": "EasyAuthApis",
-    "KEY_PATH": "/home/josh/python/easyauth",
+    "KEY_PATH": "tests/",
     "KEY_NAME": "test_key"
 }
