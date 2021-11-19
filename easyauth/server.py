@@ -8,7 +8,7 @@ import json
 import logging
 import asyncio
 import subprocess
-from typing import Any
+from typing import Any, Union
 
 from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordBearer
@@ -25,10 +25,22 @@ from google.oauth2 import id_token
 from google.auth.transport import requests
 
 from easyauth.db import database_setup
-from easyauth.models import tables_setup
+
+from easyauth.models import (
+    Users,
+    Groups,
+    Roles,
+    Actions,
+    Tokens,
+    PendingUsers,
+    EmailConfig,
+    OauthConfig,
+)
+from easyauth.router import EasyAuthAPIRouter
+
 from easyauth.api import api_setup
 from easyauth.frontend import frontend_setup
-from easyauth.router import EasyAuthAPIRouter
+
 from easyauth.exceptions import (
     GoogleOauthNotEnabledOrConfigured,
     GoogleOauthHeaderMalformed
@@ -49,7 +61,6 @@ class EasyAuthServer:
         admin_title: str = 'EasyAuth',
         admin_prefix: str = '/admin',
         logger: logging.Logger = None,
-        db_proxy_port: int = 8091,
         manager_proxy_port: int = 8092,
         debug: bool = False,
         env_from_file: str = None,
@@ -71,6 +82,9 @@ class EasyAuthServer:
 
         # extra routers
         self.api_routers = []
+
+        EasyAuthAPIRouter.parent = self
+
         self.create_api_router()                            # API Router
         self.create_api_router(prefix=self.ADMIN_PREFIX)    # ADMIN GUI Router
 
@@ -99,7 +113,7 @@ class EasyAuthServer:
         async def shutdown_auth_server():
             self.log.warning(f"EasyAuthServer - Starting shutdown process!")
             if self.leader:
-                shutdown_proxies = f"for pid in $(ps aux | egrep '{db_proxy_port}|{manager_proxy_port}' | awk '{{print $2}}'); do kill $pid; done"
+                shutdown_proxies = f"for pid in $(ps aux | grep {manager_proxy_port}' | awk '{{print $2}}'); do kill $pid; done"
                 os.system(shutdown_proxies)
             self.log.warning(f"EasyAuthServer - Finished shutdown process!")
 
@@ -178,7 +192,6 @@ class EasyAuthServer:
         admin_title: str = 'EasyAuth',
         admin_prefix: str = '/admin',
         logger: logging.Logger = None,
-        db_proxy_port: int = 8091,
         manager_proxy_port: int = 8092,
         debug: bool = False,
         env_from_file: str = None,
@@ -198,20 +211,18 @@ class EasyAuthServer:
             admin_title,
             admin_prefix,
             logger,
-            db_proxy_port,
             manager_proxy_port,
             debug,
             env_from_file,
             default_permission
         )
 
-        await database_setup(auth_server, db_proxy_port)
-        await tables_setup(auth_server)
+        await database_setup(auth_server)
         await api_setup(auth_server)
         await frontend_setup(auth_server)
 
         if auth_server.leader:
-            # create subprocess for db_proxy
+            # create subprocess for manager proxy
             auth_server.log.warning(f"starting manager_proxy")
             auth_server.manager_proxy = subprocess.Popen(
                 f"gunicorn easyauth.manager_proxy:server -w 1 -k uvicorn.workers.UvicornWorker -b 127.0.0.1:8092".split(' ')
@@ -303,12 +314,12 @@ class EasyAuthServer:
 
         if auth_server.leader:
             await asyncio.sleep(1)
-            valid_tokens = await auth_server.auth_tokens.select('token_id')
+            valid_tokens = await Tokens.all()
             for token in valid_tokens:
                 await auth_server.global_store_update(
                     'update',
                     'tokens',
-                    token['token_id'],
+                    token.token_id,
                     ''
                 )
         else:
@@ -363,7 +374,7 @@ class EasyAuthServer:
             self.server.include_router(auth_api_router.server)
 
     def create_api_router(self, *args, **kwargs):
-        api_router = EasyAuthAPIRouter.create(self, *args, **kwargs)
+        api_router = EasyAuthAPIRouter.create(*args, **kwargs)
         self.api_routers.append(
             api_router
         )
@@ -429,11 +440,14 @@ class EasyAuthServer:
         send_activation_emails: bool,
     ):
 
-        await self.db.tables['email_config'].delete(where={'is_enabled': True})
+        # clear existing email config
+        for email_config in await EmailConfig.all():
+            await email_config.delete()
 
         # encode password
         encoded_password = self.encode(days=99000, password=password)
-        await self.db.tables['email_config'].insert(
+
+        await EmailConfig.create(
             username=username,
             password=encoded_password,
             mail_from=mail_from,
@@ -443,22 +457,14 @@ class EasyAuthServer:
             mail_tls=mail_tls,
             mail_ssl=mail_ssl,
             is_enabled=False,
-            send_activation_emails=send_activation_emails,
-        )
-
-        await self.db.tables['email_config'].update(
-            is_enabled=True, 
-            where={'username': username}
+            send_activation_emails=send_activation_emails, 
         )
 
         return f"email setup completed"
 
 
-    async def get_email_config(self):
-        email_conf = await self.db.tables['email_config'].select(
-            '*', where={'is_enabled': True}
-        )
-        return email_conf
+    async def get_email_config(self) -> EmailConfig:
+        return await EmailConfig.all()
 
     async def send_email(self, subject: str, email: str, recipients, test_email: bool = False):
 
@@ -518,15 +524,12 @@ class EasyAuthServer:
     async def global_store_update(self, action, store, key, value):
         manager_methods = self.rpc_server['manager']
         if 'global_store_update' in manager_methods:
-            self.log.warning(f"global_store_update - triggered")
             await manager_methods['global_store_update'](action, store, key, value)
-            self.log.warning(f"global_store_update - finished")
         return
 
     async def revoke_token(self, token_id: str):
-        token = await self.auth_tokens.delete(
-            where={'token_id': token_id}
-        )
+        token = await Tokens.get(token_id=token_id)
+        await token.delete()
         await self.global_store_update(
             'delete',
             'tokens',
@@ -550,7 +553,7 @@ class EasyAuthServer:
                 minutes=minutes, hours=hours, days=days
         )
 
-        await self.auth_tokens.insert(
+        await Tokens.create(
             token_id=token_id,
             username=permissions['users'][0],
             issued=datetime.datetime.now().isoformat(),
@@ -612,26 +615,20 @@ class EasyAuthServer:
     def decode_password(self, encoded, auth):
         return self.decode(encoded, auth)
 
-    async def get_google_oauth_client_id(self):
-        client_id = await self.db.tables['oauth'].select(
-            'client_id',
-            where={'provider': 'google'}
+    async def get_google_oauth_client_id(self) -> str:
+        google_oauth = await OauthConfig.filter(
+            provider='google'
         )
 
-        return client_id[0]['client_id'] if client_id else ''
+        return google_oauth[0].client_id if google_oauth else ''
 
     async def get_identity_providers(self):
-        oauth_config = await self.db.tables['oauth'].select(
-            '*',
-            where={
-                'enabled': True
-
-            }
-        )
+        providers = await OauthConfig.all()
+        providers = [p for p in providers if p.enabled]
 
         identity_providers = {
-            idp['provider']: idp['client_id'] 
-            for idp in oauth_config if not idp['provider'] == 'easyauth'
+            idp.provider: idp.client_id 
+            for idp in providers if not idp.provider == 'easyauth'
         }
         return identity_providers
 
@@ -640,18 +637,13 @@ class EasyAuthServer:
         Generate a token for an existing User and/or create user using
         provided oauth2 token
         """
-        # verify google oath is configured
-        oauth_config = await self.db.tables['oauth'].select(
-            '*',
-            where={
-                'provider': 'google',
-                'enabled': True
-            }
+        google_oauth = await OauthConfig.filter(
+            provider='google'
         )
 
-        if not oauth_config:
+        if not google_oauth:
             raise GoogleOauthNotEnabledOrConfigured
-        oauth_config = oauth_config[0]
+        oauth_config = google_oauth[0]
 
         if not auth_code:
             # verify OAuth2 type
@@ -667,7 +659,7 @@ class EasyAuthServer:
             idinfo = id_token.verify_oauth2_token(
                 auth_code, 
                 requests.Request(), 
-                oauth_config['client_id']
+                oauth_config.client_id
             )
 
             if idinfo['email'] and idinfo['email_verified']:
@@ -676,11 +668,13 @@ class EasyAuthServer:
             else:
                 raise HTTPException(status_code=400, detail="Unable to validate social login")
 
-        except:
+        except Exception as e:
+            self.log.exception(f"error validating social login")
             raise HTTPException(status_code=400, detail="Unable to validate social login")
 
         # verify user exists
-        user = await self.auth_users.select('*', where={'email': email})
+        user = await Users.filter(email=email)
+        
         if not user:
             # does not exist, create
             result = await self.register_user(
@@ -691,93 +685,66 @@ class EasyAuthServer:
                     'email': email,
                     'password': '',
                     'repeat password': '',
-                    'groups': oauth_config['default_groups']['default_groups']
+                    'groups': [g.group_name for g in oauth_config.default_groups]
                 }
             )
             if 'Activation email sent to' in result:
                 return result
 
             # no activation was required
-            user = await self.auth_users.select('*', where={'email': email})
+            user = await Users.filter(email=email)
 
-        permissions = await self.get_user_permissions(user[0]['username'])
+        permissions = await self.get_user_permissions(user[0].username)
+
         return await self.issue_token(permissions)
 
-        
 
+    async def validate_user_pw(self, username, password) -> Union[Users, None]:
+        user = await Users.get(username=username)
 
-    async def validate_user_pw(self, username, password):
-        user = await self.auth_users.select('*', where={'username': username})
-        if len(user) > 0:
-            if user[0]['account_type'] == 'service':
+        if user:
+            if user.account_type == 'service':
                 raise HTTPException(status_code=401, detail=f"unable to login with service accounts")
-            self.log.warning(f"checking auth for {user}")
             try:
                 try:
-                    if self.is_password_valid(user[0]['password'], password):
-                        return user
-                except ValueError:
+                    if not self.is_password_valid(user.password, password):
+                        return None
+                    return user
+                except ValueError as e:
+                    self.log.exception(f"error validating user_pw")
                     pass
-
-                # try old auth
-                decoded_password = self.decode_password(user[0]['password'], password)
-                self.log.warning(f"old password used: - updating")
-                await self.auth_users.update(
-                    password=self.encode_password(decoded_password['password']),
-                    where={'username': username}
-                )
+                
                 return user
             except Exception as e:
-                self.log.error(f"Auth failed for user {user} - invalid credentials")
+                self.log.error(f"Auth failed for user {user.username} - invalid credentials")
         return None
-    async def get_user_permissions(self, username: str) -> list:
+
+    async def get_user_permissions(self, username: str) -> dict:
         """
         accepts validated user returned by validate_user_pw
         returns allowed permissions based on member group's roles / permissonis
         """
-        user = await self.auth_users.select('*', where={'username': username})
-        user = user[0]
+        user = await Users.get(username=username)
 
         permissions = {}
-        groups = user['groups']['groups']
-        for group in groups:
-            group_data = await self.auth_groups.select('*', where={'group_name': group})
-            if not group_data:
-                self.log.error(f"group {group} not found in groups table")
-                continue
-            group_data = group_data[0]
 
-            if isinstance(group_data['roles'], dict):
-                group_data['roles'] = group_data['roles']['roles']
-            for role in group_data['roles']:
-                role_info = await self.auth_roles.select('*', where={'role': role})
-                if not role_info:
-                    self.log.error(f"role {role} not found in roles table - {role_info}")
-                    continue
-                role_info = role_info[0]
-                if isinstance(role_info['permissions'], dict):
-                    role_info['permissions'] = role_info['permissions']['actions']
-                for action in role_info['permissions']:
+        for group in user.groups:
+            for role in group.roles:
+                for action in role.actions:
                     if not 'actions' in permissions:
                         permissions['actions'] = []
                     
                     if not action in permissions['actions']:
-                        action_info = await self.auth_actions.select(
-                            'action', where={'action': action}
-                        )
-                        if not action_info:
-                            self.log.error(f"action {action} not found in actions table- {action_info}")
-                            continue
-                        permissions['actions'].append(action)
+                        permissions['actions'].append(action.action)
                 if not 'roles' in permissions:
                     permissions['roles'] = []
                 if not role in permissions['roles']:
-                    permissions['roles'].append(role)
+                    permissions['roles'].append(role.role)
             if not 'groups' in permissions:
                 permissions['groups'] = []
             if not group in permissions['groups']:
-                permissions['groups'].append(group)
-        permissions['users'] = [user['username']]
+                permissions['groups'].append(group.group_name)
+        permissions['users'] = [user.username]
         return permissions
 
     def router(self, path, method, permissions: list, send_token: bool = False, *args, **kwargs):
@@ -853,7 +820,6 @@ class EasyAuthServer:
 
                 try:
                     token = self.decode_token(token)[1]
-                    self.log.debug(f"decoded token: {token}")
                 except Exception:
                     self.log.error(f"error decoding token")
                     if response_class is HTMLResponse:

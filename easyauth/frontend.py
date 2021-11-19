@@ -1,10 +1,20 @@
-from copy import deepcopy
 from re import sub
 from easyadmin import Admin, buttons, forms, html_input, row, card, modal, admin
 from easyadmin.elements import scripts
 from easyadmin.pages import register
 from fastapi.responses import HTMLResponse
 from fastapi import HTTPException, Request
+from easyauth.models import (
+    Users,
+    Services,
+    Groups,
+    Roles,
+    Actions,
+    Tokens,
+    EmailConfig,
+    OauthConfig,
+)
+
 
 async def frontend_setup(server):
 
@@ -23,35 +33,30 @@ async def frontend_setup(server):
                         'name':  'Users',
                         'href': f'{admin_prefix}/users',
                         'icon': 'user',
-                        #'onclick': f"OnClickUpdate('{admin_prefix}/users', 'page-top')",
                         'items': []
                     },
                     {
                         'name':  'Services',
                         'href': f'{admin_prefix}/services',
                         'icon': 'robot',
-                        #'onclick': f"OnClickUpdate('{admin_prefix}/services', 'page-top')",
                         'items': []
                     },
                     {
                         'name':  'Groups',
                         'href': f'{admin_prefix}/groups',
                         'icon': 'users',
-                        #'onclick': f"OnClickUpdate('{admin_prefix}/groups', 'page-top')",
                         'items': []
                     },
                     {
                         'name':  'Roles',
                         'href': f'{admin_prefix}/roles',
                         'icon': 'bezier-curve',
-                        #'onclick': f"OnClickUpdate('{admin_prefix}/roles', 'page-top')",
                         'items': []
                     },
                     {
                         'name':  'Actions',
                         'href': f'{admin_prefix}/actions',
                         'icon': 'id-badge',
-                        #'onclick': f"OnClickUpdate('{admin_prefix}/actions', 'page-top')",
                         'items': []
                     }
                 ]
@@ -62,7 +67,6 @@ async def frontend_setup(server):
                         'name':  'Tokens Issued',
                         'href': f'{admin_prefix}/tokens',
                         'icon': 'key',
-                        #'onclick': f"OnClickUpdate('{admin_prefix}/tokens', 'page-top')",
                         'items': []
                     }
                 ]
@@ -73,7 +77,6 @@ async def frontend_setup(server):
                         'name':  'Email',
                         'href': f'{admin_prefix}/email',
                         'icon': 'envelope',
-                        #'onclick': f"OnClickUpdate('{admin_prefix}/email', 'page-top')",
                         'items': [
                         ]
                     }
@@ -85,7 +88,6 @@ async def frontend_setup(server):
                         'name':  'Identity Providers',
                         'href': f'{admin_prefix}/oauth',
                         'icon': 'passport',
-                        #'onclick': f"OnClickUpdate('{admin_prefix}/oauth', 'page-top')",
                         'items': [
                         ]
                     }
@@ -97,7 +99,6 @@ async def frontend_setup(server):
                         'name':  'APIs',
                         'href': f'/docs',
                         'icon': 'flag',
-                        #'onclick': f"OnClickUpdate('/docs', 'page-top')",
                         'items': [
                         ]
                     }
@@ -105,6 +106,8 @@ async def frontend_setup(server):
             },
         ]
     )
+    
+    google = await server.get_google_oauth_client_id()
 
     logout_modal = modal.get_modal(
         f'logoutModal',
@@ -114,7 +117,7 @@ async def frontend_setup(server):
             color='success',
             href=f'{admin_prefix}/'
         ) +
-        scripts.get_google_signout_script() + 
+        scripts.get_signout_script(google=False if not google else True) + 
         buttons.get_button(
             'Log out',
             color='danger',
@@ -127,6 +130,7 @@ async def frontend_setup(server):
     @admin_gui.get('/', response_class=HTMLResponse, send_token=True, include_in_schema=False)
     async def admin_home(access_token=None):
         return await _admin_users(access_token)
+        
     @admin_gui.post('/', response_class=HTMLResponse, send_token=True, include_in_schema=False)
     async def re_admin_users(access_token=None):
         return await _admin_users(access_token)
@@ -136,51 +140,45 @@ async def frontend_setup(server):
         return await _admin_users(access_token)
     
     @admin_gui.get('/services', response_class=HTMLResponse, send_token=True, include_in_schema=False)
-    async def admin_users(access_token=None):
+    async def admin_services(access_token=None):
         return await _admin_users(access_token, account_type='service')
 
     @admin_gui.get('/user/{username}', response_class=HTMLResponse, send_token=True, include_in_schema=False)
     async def admin_user_page(username: str, access_token: str = None):
-        users = await server.auth_users.select(
-            'username', where={'username': username}
-        )
-        if not users:
+        user = await Users.get(username=username)
+        if not user:
             raise HTTPException(
                 status_code=404,
                 detail=f"No User with name {username} exists"
             )
             
-        groups = await server.auth_groups.select('group_name')
-        groups = deepcopy([group['group_name'] for group in groups])
+        groups = [g.group_name for g in await Groups.all()]
 
         user_page = admin.get_admin_page(
             name=username, 
             sidebar=server.admin.sidebar,
-            body=await get_user_details(username, groups),
+            body=await get_user_details(user),
             current_user=access_token['permissions']['users'][0],
             modals=logout_modal + scripts.get_onclick_form_submit_script(transform=True),
-            google=await server.get_google_oauth_client_id()
+            google=google
         )
         return user_page
 
-    @admin_gui.get('/service/{username}', response_class=HTMLResponse, send_token=True, include_in_schema=False)
-    async def admin_service_page(username: str, access_token: str = None):
-        users = await server.auth_users.select(
-            'username', where={'username': username}
-        )
-        if not users:
+    @admin_gui.get('/service/{service_name}', response_class=HTMLResponse, send_token=True, include_in_schema=False)
+    async def admin_service_page(service_name: str, access_token: str = None):
+        service = await Services.get(username=service_name)
+        if not service:
             raise HTTPException(
                 status_code=404,
-                detail=f"No Service with name {username} exists"
+                detail=f"No Service with name {service_name} exists"
             )
-            
-        groups = await server.auth_groups.select('group_name')
-        groups = deepcopy([group['group_name'] for group in groups])
+        
+        groups = [g.group_name for g in await Groups.all()]
 
         user_page = admin.get_admin_page(
-            name=username, 
+            name=service_name, 
             sidebar=server.admin.sidebar,
-            body=await get_user_details(username, groups),
+            body=await get_user_details(service),
             current_user=access_token['permissions']['users'][0],
             modals=logout_modal,
             google=await server.get_google_oauth_client_id()
@@ -188,42 +186,48 @@ async def frontend_setup(server):
         return user_page
 
 
-    async def get_user_details(username: str, all_groups: list):
+    async def get_user_details(user):
 
-        details = await server.get_user_details(username)
-        username_normalized = sub('[@.]', '', username)
+        all_groups = await Groups.all()
+        
+        username_normalized = sub('[@.]', '', user.username)
         update_form = forms.get_form(
             f'Update {username_normalized}',
             [
-                html_input.get_text_input("username", value=username),
+                html_input.get_text_input("username", value=user.username),
                 html_input.get_text_input("password", input_type='password') 
-                if details['account_type'] == 'user' else '',
-                html_input.get_text_input("email", value=details['email']) + 
-                html_input.get_text_input("full_name", value=details['full_name'])
-                if details['account_type'] == 'user' else '',
+                if user.account_type == 'user' else '',
+                html_input.get_text_input("email", value=user.email) + 
+                html_input.get_text_input("full_name", value=user.full_name)
+                if user.account_type == 'user' else '',
                 html_input.get_checkbox('groups', [
-                    (group, True) for group in details['groups']['groups'] ] +
-                    [(group, False) for group in all_groups if not group in details['groups']['groups']],
+                    (group.group_name, True) for group in user.groups] +
+                    [(group.group_name, False) for group in all_groups if not group in user.groups],
                     size=12,
-                    unique_id=username
+                    unique_id=user.username
                 )
             ],
             submit_name='update user',
             method='post',
-            action=f'/auth/user/{username}',
+            action=f'/auth/user/{user.username}',
             transform_id=f'Update{username_normalized}',
         )
-        groups, roles, actions = [], [], [] 
-        if 'groups' in details['permissions']:
-            groups = [group for group in details['permissions']['groups']]
-        if 'roles' in details['permissions']:
-            roles = [role for role in details['permissions']['roles']]
-        if 'actions' in details['permissions']:
-            actions = [action for action in details['permissions']['actions']]
+
+        groups, roles, actions = [], [], []
+        for group in user.groups:
+            for role in group.roles:
+                if role.role in roles:
+                    continue
+                for action in role.actions:
+                    if action.action in actions:
+                        continue
+                    actions.append(action.action)
+                roles.append(role.role)
+            groups.append(group.group_name)
 
         modal_row = row.get_row(
             card.get_card(
-                f'{username}',
+                f'{user.username}',
                 update_form,
                 size=12
             )+
@@ -268,20 +272,19 @@ async def frontend_setup(server):
 
     
     async def _admin_users(access_token: str, account_type='user'):
-        users = await server.auth_users.select(
-            'username', 'full_name', 'email', 'account_type', 'groups',
-            where={'account_type': account_type}
-        )
-        users = users.copy()
-        
-        groups = await server.auth_groups.select('group_name')
-        groups = deepcopy([group['group_name'] for group in groups])
+        if account_type == 'user':
+            users = await Users.all()
+        else:
+            users = await Services.all()
+
+        groups = [g.group_name for g in await Groups.all()]
+
         modals = [logout_modal]
 
-        users_table = deepcopy(users)
+        users_table = [user.dict() for user in users]
 
         for ind, user in enumerate(users):
-            username = user['username']
+            username = user.username
             username_normalized = sub('[@.]', '', username)
             modals.append(
                 modal.get_modal(
@@ -308,7 +311,7 @@ async def frontend_setup(server):
                 modal.get_modal(
                     f'view_{username_normalized}',
                     alert='',
-                    body=await get_user_details(username, groups),
+                    body=await get_user_details(user),
                     footer='',
                     size='lg'
             ))
@@ -335,8 +338,10 @@ async def frontend_setup(server):
                     )
                 )
             users_table[ind]['groups'] = ''.join([
-                buttons.get_button(group, color='success', href=f'{admin_prefix}/group/{group}')
-                for group in users_table[ind]['groups']['groups']
+                buttons.get_button(
+                    group["group_name"], color='success', href=f'{admin_prefix}/group/{group["group_name"]}'
+                )
+                for group in users_table[ind]['groups']
             ])
             actions = ( 
                 buttons.get_split_button(
@@ -367,6 +372,8 @@ async def frontend_setup(server):
             f'{account_type}': f"No {account_type}'s created yet",
         }]
 
+        google = await server.get_google_oauth_client_id()
+
         return server.admin.table_page(
             f'{account_type}s',
             users_table if len(users_table) > 0 else users_default,
@@ -383,7 +390,7 @@ async def frontend_setup(server):
                     email_and_full_name_input if account_type =='user' else '' ,
                     html_input.get_checkbox(
                         'groups', 
-                        [(group, False) for group in deepcopy(groups)],
+                        [(group, False) for group in groups],
                         size=12
                     )
                 ],
@@ -391,45 +398,35 @@ async def frontend_setup(server):
                 method='put',
                 action=f'/auth/{account_type}'
             ),
-            google=await server.get_google_oauth_client_id()
+            google=google
         )
 
     async def get_group_details(group_name: str):
-        group = await server.auth_groups.select(
-            '*', where={'group_name': group_name}
-        )
+        group = await Groups.get(group_name=group_name)
+
         if not group:
             raise HTTPException(
                 status_code=404,
                 detail=f"No Group with name {group_name} exists"
             )
-        group = group[0]
 
-        all_roles = await server.auth_roles.select('role')
-        all_roles = [role['role'] for role in all_roles]
+        all_roles = [r.role for r in await Roles.all()]
 
-        roles = group['roles']['roles'] if isinstance(group['roles'], dict) else group['roles'] 
-        roles = [role for role in roles if role in all_roles]
+        roles = [role.role for role in group.roles if role.role in all_roles]
 
         permissions = []
-        all_actions = await server.auth_actions.select('action')
-        all_actions = [action['action'] for action in all_actions]
-        for role in roles:
-            actions = await server.auth_roles.select(
-                'permissions', where={'role': role}
-            )
-            for action in actions.copy():
-                if isinstance(action['permissions'], dict):
-                    action['permissions'] = action['permissions']['actions']
-                for action in action['permissions']:
-                    if action in all_actions and not action in permissions:
-                        permissions.append(action)
+        all_actions = await Actions.all()
+        all_actions = [action.action for action in all_actions]
+        for role in group.roles:
+            for action in role.actions:
+                if not action.action in permissions:
+                    permissions.append(action.action)
 
-        users = await server.auth_users.select('username', 'groups')
-        for user in users.copy():
-            if isinstance(user['groups'], dict):
-                user['groups'] = user['groups']['groups']
-        users = [user['username'] for user in users if group_name in user['groups']]
+        users = await Users.all()
+        users = [
+            user.username for user in users 
+            if group_name in [g.group_name for g in user.groups]
+        ]
 
         roles_in_group = [
             (role, True) for role in roles] + [
@@ -499,9 +496,8 @@ async def frontend_setup(server):
 
     @admin_gui.get('/group/{group_name}', response_class=HTMLResponse, send_token=True, include_in_schema=False)
     async def admin_group_page(group_name: str, access_token: str = None):
-        group = await server.auth_groups.select(
-            '*', where={'group_name': group_name}
-        )
+        group = await Groups.get(group_name=group_name)
+
         if not group:
             raise HTTPException(
                 status_code=404,
@@ -520,20 +516,18 @@ async def frontend_setup(server):
 
     @admin_gui.get('/groups', response_class=HTMLResponse, send_token=True, include_in_schema=False)
     async def admin_groups(access_token=None):
-        groups = await server.auth_groups.select('*')
+        groups = await Groups.all()
 
-        groups = groups.copy()
-        roles = await server.auth_roles.select('role')
+        roles = await Roles.all()
 
-        roles = deepcopy([role['role'] for role in roles])
         modals = [logout_modal]
 
-        groups_table = deepcopy(groups)
+        groups_table = [group.dict() for group in groups]
+
         for ind, group in enumerate(groups):
-            group_name = group['group_name']
-            if isinstance(group['roles'], dict):
-                group['roles'] = group['roles']['roles']
-                modals.append(modal.get_modal(
+            group_name = group.group_name
+            modals.append(
+                modal.get_modal(
                     f'delete{group_name}Modal',
                     alert='',
                     body=forms.get_form(
@@ -561,10 +555,10 @@ async def frontend_setup(server):
             ))
             groups_table[ind]['roles'] = ''.join([
                 buttons.get_button(
-                    role,
+                    role.role,
                     color='success', 
-                    href=f'{admin_prefix}/role/{role}')
-                for role in group['roles'] if role in roles
+                    href=f'{admin_prefix}/role/{role.role}')
+                for role in group.roles if role in roles
             ])
 
             actions = ( 
@@ -582,6 +576,8 @@ async def frontend_setup(server):
             )
             groups_table[ind][' '] = actions
 
+        google = await server.get_google_oauth_client_id()
+
         admin_table =  server.admin.table_page(
             'Groups',
             groups_table if len(groups_table) > 0 else [{'group_name': 'NO GROUPS', 'roles': ''}],
@@ -594,7 +590,7 @@ async def frontend_setup(server):
                     html_input.get_text_input("group_name"),
                     html_input.get_checkbox(
                         'roles', 
-                        [(role, False) for role in roles],
+                        [(role.role, False) for role in roles],
                         size=12
                     )
                 ],
@@ -602,44 +598,39 @@ async def frontend_setup(server):
                 method='put',
                 action='/auth/group'
             ),
-            google=await server.get_google_oauth_client_id()
+            google=google
         )
         return admin_table
 
 
     async def get_role_details(role_name: str):
-        role = await server.auth_roles.select(
-            '*', where={'role': role_name}
-        )
+        role = await Roles.get(role=role_name)
         if not role:
             raise HTTPException(
                 status_code=404,
                 detail=f"No Role with name {role_name} exists"
             )
-        role = role[0]
+        role_actions = role.actions
+        all_actions = await Actions.all()
+        all_actions = [action.action for action in all_actions]
 
-        permissions = role['permissions']['actions'] if isinstance(role['permissions'], dict) else role['permissions']
-        all_actions = await server.auth_actions.select('action')
-        all_actions = [action['action'] for action in all_actions]
+        permissions = [action.action for action in role_actions if action.action in all_actions]
 
-        permissions = [action for action in permissions if action in all_actions]
+        all_groups = await Groups.all()
 
-        all_groups = await server.auth_groups.select('group_name', 'roles')
-        for group in all_groups.copy():
-            if isinstance(group['roles'], dict):
-                group['roles'] = group['roles']['roles']
+        groups = [
+            group.group_name for group in all_groups 
+            if role_name in [r.role for r in group.roles]
+        ]
 
-        groups = [group['group_name'] for group in all_groups if role_name in group['roles']]
+        all_users = await Users.all()
 
-        all_users = await server.auth_users.select('username', 'groups')
         users = []
-        for user in all_users.copy():
-            if isinstance(user['groups'], dict):
-                user['groups'] = user['groups']['groups']
+
         for user in all_users:
-            for group in user['groups']:
-                if group in groups:
-                    users.append(user['username'])
+            for group in user.groups:
+                if group.group_name in groups:
+                    users.append(user.username)
                     break
         actions_in_role = [
             (action, True) for action in permissions] + [
@@ -708,9 +699,7 @@ async def frontend_setup(server):
 
     @admin_gui.get('/role/{role_name}', response_class=HTMLResponse, send_token=True, include_in_schema=False)
     async def admin_role_page(role_name: str, access_token=None):
-        role = await server.auth_roles.select(
-            'role', where={'role': role_name}
-        )
+        role = await Roles.get(role=role_name)
         if not role:
             raise HTTPException(
                 status_code=404,
@@ -729,10 +718,11 @@ async def frontend_setup(server):
 
     @admin_gui.get('/roles', response_class=HTMLResponse, send_token=True, include_in_schema=False)
     async def admin_roles(access_token=None):
-        roles = await server.auth_roles.select('*')
-        roles = roles.copy()
-        permissions = await server.auth_actions.select('action')
-        permissions = [action['action'] for action in permissions]
+        roles = [role.dict() for role in await Roles.all()]
+
+        all_actions = await Actions.all()
+        all_actions = [action.action for action in all_actions]
+
         modals = [logout_modal]
         for role in roles:
             role_name = role['role']
@@ -761,13 +751,13 @@ async def frontend_setup(server):
                 footer='',
                 size='lg'
             ))
-            role['permissions'] = role['permissions']['actions']
-            role['permissions'] = ''.join([
+
+            role['actions'] = ''.join([
                 buttons.get_button(
-                    action,
+                    action['action'],
                     color='success', 
-                    href=f'{admin_prefix}/action/{action}')
-                for action in role['permissions'] if action in permissions
+                    href=f'{admin_prefix}/action/{action["action"]}')
+                for action in role['actions'] if action['action'] in all_actions
             ])
 
             actions = ( 
@@ -795,8 +785,8 @@ async def frontend_setup(server):
                 [
                     html_input.get_text_input("role"),
                     html_input.get_checkbox(
-                        'permissions', 
-                        [(action, False) for action in permissions],
+                        'actions', 
+                        [(action, False) for action in all_actions],
                         size=12
                     )
                 ],
@@ -806,70 +796,61 @@ async def frontend_setup(server):
             ),
             google=await server.get_google_oauth_client_id()
         )
-        _roles = await server.auth_roles.select('*')
 
         return admin_table
 
     async def get_action_details(action: str):
-        permission = await server.auth_actions.select(
-            '*', where={'action': action}
-        )
-        permission = permission.copy()
-        if not permission:
+        action = await Actions.get(action=action)
+
+        if not action:
             raise HTTPException(
                 status_code=404,
                 detail=f"No permission with name {action} exists"
             )
-        permission = permission[0]
 
-        all_roles = await server.auth_roles.select('*')
-        for role in all_roles.copy():
-            if isinstance(role['permissions'], dict):
-                role['permissions'] = role['permissions']['actions']
+        all_roles = await Roles.all()
         
         roles = []
         for role in all_roles:
-            if permission['action'] in role['permissions']:
-                roles.append(role['role'])
-                break
+            role_actions = {a.action for a in role.actions}
+            if action.action in role_actions:
+                roles.append(role.role)
+        roles = list(set(roles))
         
-        all_groups = await server.auth_groups.select('group_name', 'roles')
-        for group in all_groups.copy():
-            if isinstance(group['roles'], dict):
-                group['roles'] = group['roles']['roles']
+        all_groups = await Groups.all()
+
         groups = []
         for group in all_groups:
-            for role in group['roles']:
-                if role in roles:
-                    groups.append(group['group_name'])
+            for role in group.roles:
+                if role.role in roles:
+                    groups.append(group.group_name)
                     break
 
-        all_users = await server.auth_users.select('username', 'groups')
+        all_users = await Users.all()
+
         users = []
-        for user in all_users.copy():
-            if isinstance(user['groups'], dict):
-                user['groups'] = user['groups']['groups']
+
         for user in all_users:
-            for group in user['groups']:
-                if group in groups:
-                    users.append(user['username'])
+            for group in user.groups:
+                if group.group_name in groups:
+                    users.append(user.username)
                     break
                 
         update_form = forms.get_form(
-            f'Update {action}',
+            f'Update {action.action}',
             [
-                html_input.get_text_input("action", value=action),
-                html_input.get_text_input("details", value=permission['details'])
+                html_input.get_text_input("action", value=action.action),
+                html_input.get_text_input("details", value=action.details)
             ],
             submit_name='update permission',
             method='post',
-            action='/auth/permissions',
-            transform_id=f'Update{action}'
+            action='/auth/actions',
+            transform_id=f'Update{action.action}'
         )
 
         modal_row = row.get_row(
             card.get_card(
-                f'{action}',
+                f'{action.action}',
                 update_form,
                 size=12
             )+
@@ -911,20 +892,21 @@ async def frontend_setup(server):
             )
         )
         return modal_row
+
     @admin_gui.get('/action/{action}', response_class=HTMLResponse, send_token=True, include_in_schema=False)
     async def admin_action_page(action: str, access_token=None):
-        permission = await server.auth_actions.select(
-            '*', where={'action': action}
-        )
-        if not permission:
+        action = await Actions.get(action=action)
+
+        if not action:
             raise HTTPException(
                 status_code=404,
-                detail=f"No permission with name {action} exists"
+                detail=f"No action with name {action.action} exists"
             )
+
         action_page = admin.get_admin_page(
             name=action, 
             sidebar=server.admin.sidebar,
-            body=await get_action_details(action),
+            body=await get_action_details(action.action),
             current_user=access_token['permissions']['users'][0],
             modals=logout_modal,
             google=await server.get_google_oauth_client_id()
@@ -933,15 +915,16 @@ async def frontend_setup(server):
 
     @admin_gui.get('/actions', response_class=HTMLResponse, send_token=True, include_in_schema=False)
     async def admin_actions(access_token=None):
-        permissions = await server.auth_actions.select('*')
+        actions = await Actions.all()
+        actions_table = [action.dict() for action in actions]
         modals = [logout_modal]
-        for permission in permissions:
-            action = permission['action']
-            modals.append(modal.get_modal(
-                    f'delete{action}Modal',
+        for action in actions_table:
+            modals.append(
+                modal.get_modal(
+                    f"delete{action['action']}Modal",
                     alert='',
                     body=forms.get_form(
-                        f'Delete Action {action}',
+                        f"Delete Action {action['action']}",
                         [
                             buttons.get_button(
                                 'Go Back',
@@ -950,36 +933,36 @@ async def frontend_setup(server):
                         )],
                         submit_name='delete action',
                         method='delete',
-                        action=f'/auth/permission?action={action}'
+                        action=f"/auth/action?action={action['action']}"
                     ),
                     footer='',
                     size='sm'
                 )
             )
             modals.append(modal.get_modal(
-                f'view_{action}',
+                f"view_{action['action']}",
                 alert='',
-                body=await get_action_details(action),
+                body=await get_action_details(action['action']),
                 footer='',
                 size='lg'
             ))
-            actions = ( 
+            view_actions = ( 
                 buttons.get_split_button(
                     f'view / edit',
                     icon='eye',
-                    modal=f'view_{action}'
+                    modal=f"view_{action['action']}"
                 ) + 
                 buttons.get_split_button(
                     f'delete', 
-                    modal=f'delete{action}Modal', 
+                    modal=f"delete{action['action']}Modal", 
                     color='danger',
                     icon='trash'
                 )
             )
-            permission[' '] = actions
+            action[' '] = view_actions
         return server.admin.table_page(
             'Permissions',
-            permissions if len(permissions) > 0 else [{'action': 'NO_ACTIONS', 'details': ''}],
+            actions_table if len(actions_table) > 0 else [{'action': 'NO_ACTIONS', 'details': ''}],
             current_user=access_token['permissions']['users'][0],
             modals=''.join(modals),
             above="",
@@ -991,7 +974,7 @@ async def frontend_setup(server):
                 ],
                 submit_name='create permission',
                 method='put',
-                action='/auth/permissions'
+                action='/auth/actions'
             ),
             google=await server.get_google_oauth_client_id()
         )
@@ -1062,11 +1045,12 @@ async def frontend_setup(server):
     
     @admin_gui.get('/tokens', response_class=HTMLResponse, send_token=True, include_in_schema=False)
     async def admin_tokens(access_token=None):
-        tokens_raw = await server.auth_tokens.select('*')
+        all_tokens = await Tokens.all()
+        tokens_table = [token.dict() for token in all_tokens]
         DO_NOT_DISPLAY = {'token_id', 'token'}
 
         tokens = []
-        for ind, token in enumerate(tokens_raw):
+        for ind, token in enumerate(tokens_table):
             tk = {'number': ind}
             for k,v in token.items():
                 if k in DO_NOT_DISPLAY:
@@ -1079,9 +1063,10 @@ async def frontend_setup(server):
         token_index = {}
         for token in tokens:
             token_number = token['number']
-            token_id = tokens_raw[token_number]['token_id']
+            token_id = tokens_table[token_number]['token_id']
             token_user = sub('[@.]', '', token['username'])
-            modals.append(modal.get_modal(
+            modals.append(
+                modal.get_modal(
                     f'revoke{token_number}Modal',
                     alert='',
                     body=forms.get_form(
@@ -1100,7 +1085,7 @@ async def frontend_setup(server):
                     size='sm'
                 )
             )
-            token_details = tokens_raw[token_number]['token']
+            token_details = tokens_table[token_number]['token']
             modals.append(modal.get_modal(
                 f'view_{token_number}',
                 alert='',
@@ -1163,7 +1148,7 @@ async def frontend_setup(server):
         )
 
 
-        email_config = await server.db.tables['email_config'].select('*')
+        email_config = await EmailConfig.all()
         MAIL_USERNAME = email_config[0]['username'] if email_config else ''
         MAIL_FROM = email_config[0]['mail_from'] if email_config else ''
         MAIL_FROM_NAME = email_config[0]['mail_from_name'] if email_config else ''
@@ -1247,18 +1232,17 @@ async def frontend_setup(server):
     @admin_gui.get('/oauth', response_class=HTMLResponse, send_token=True, include_in_schema=False)
     async def admin_oauth(access_token=None):
 
-        groups = await server.auth_groups.select('group_name')
-        groups = deepcopy([group['group_name'] for group in groups])
-
-        oauth_config = await server.db.tables['oauth'].select('*')
+        #groups = [g.group_name for g in await Groups.all()]
+        groups = await Groups.all()
+        oauth_config = await OauthConfig.all()
 
         oauth_forms = []
 
         for config in oauth_config:
-            provider = config['provider']
+            provider = config.provider
             default_groups = html_input.get_checkbox(
                 'default_groups', 
-                [(group, group in config['default_groups']['default_groups']) for group in deepcopy(groups)],
+                [(group.group_name, group in config.default_groups) for group in groups],
                 size=12,
                 unique_id=provider
             )
@@ -1267,13 +1251,13 @@ async def frontend_setup(server):
                 forms.get_form(
                     f"{provider} OAuth",
                     [
-                        html_input.get_text_input("client_id", value=config['client_id']),
-                        html_input.get_checkbox('enabled', [('enabled', config['enabled'])]),
+                        html_input.get_text_input("client_id", value=config.client_id),
+                        html_input.get_checkbox('enabled', [('enabled', config.enabled)]),
                         default_groups,
                     ],
                     submit_name=f'Update {provider} OAuth',
                     method='post',
-                    action=f'/auth/oauth/{provider}',
+                    action=f'/auth/oauth/{provider}',   
                     transform_id=f'{provider}OAuth'
                 )
             )

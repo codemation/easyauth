@@ -46,6 +46,9 @@ class EasyAuthClient:
         self.token_url = token_url
         self._public_key = jwk.JWK.from_json(public_key)
 
+        #ensure new routers created follow same oath scheme
+        EasyAuthAPIRouter.parent = self
+
         self.rpc_server = rpc_server
 
         # extra routers
@@ -59,10 +62,6 @@ class EasyAuthClient:
 
         if env_from_file:
             self.load_env_from_file(env_from_file)
-
-        # env variable checks #
-        #assert 'KEY_PATH' in os.environ, f"missing KEY_PATH env variable"
-        #assert 'KEY_NAME' in os.environ, f"missing KEY_NAME env variable"
 
     @classmethod
     async def create( cls,
@@ -319,7 +318,7 @@ class EasyAuthClient:
             self.server.include_router(auth_api_router.server)
 
     def create_api_router(self, *args, **kwargs):
-        api_router = EasyAuthAPIRouter.create(self, *args, **kwargs)
+        api_router = EasyAuthAPIRouter.create(*args, **kwargs)
         self.api_routers.append(
             api_router
         )
@@ -394,9 +393,7 @@ class EasyAuthClient:
         else:
             self.log = logger
     
-
     def decode_token(self, token):
-        #with open(f"{os.environ['KEY_PATH']}/{os.environ['KEY_NAME']}.pub", 'r') as pb_key:
         return jwt.verify_jwt(
             token, 
             self._public_key, 
@@ -474,7 +471,6 @@ class EasyAuthClient:
                         return response
                 try:
                     token = self.decode_token(token)[1]
-                    self.log.debug(f"decoded token: {token}")
                 except Exception:
                     self.log.exception(f"error decoding token")
                     if response_class is HTMLResponse:

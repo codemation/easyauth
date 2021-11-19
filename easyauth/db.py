@@ -1,8 +1,21 @@
 import os
-import asyncio
-import subprocess
-from easyrpc.tools.database import EasyRpcProxyDatabase
+
+from pydbantic import Database
+
 from easyauth.quorum import quorum_setup
+from easyauth.models import (
+    Users,
+    Services,
+    Groups,
+    Roles,
+    Actions,
+    Tokens,
+    PendingUsers,
+    EmailConfig,
+    OauthConfig,
+    tables_setup
+)
+
 
 import random, string
 def get_random_string(length):
@@ -10,7 +23,7 @@ def get_random_string(length):
     result_str = ''.join(random.choice(letters) for i in range(length))
     return result_str
 
-async def database_setup(server, db_proxy_port):
+async def database_setup(server):
     """
     Expected Environment variables:
     DB_HOST 
@@ -29,32 +42,30 @@ async def database_setup(server, db_proxy_port):
     DB_NAME = os.environ['DB_NAME']
     
     if not DB_TYPE == 'sqlite':
+        conf = {}
         for env in {'DB_TYPE', 'DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASSWORD'}:
             assert env in os.environ, f"missing required {env} env variable"
+            conf[env] = os.environ[env].lower()
 
-    if server.leader:
+        DB_URL = f"{conf['DB_TYPE']}://{conf['DB_USER']}:{conf['DB_PASSWORD']}@{conf['DB_HOST']}\{conf['DB_NAME']}"
+    else:
+         DB_URL = f"{DB_TYPE}:///{DB_NAME}"
 
-        # create subprocess for db_proxy
-        server.db_proxy = subprocess.Popen(
-            f"gunicorn easyauth.db_proxy:server -w 1 -k uvicorn.workers.UvicornWorker -b 127.0.0.1:{db_proxy_port}".split(' ')
-        )
-        await asyncio.sleep(3)
 
-    DB_NAME = os.environ['DB_NAME']
-    server.db = await EasyRpcProxyDatabase.create(
-        '127.0.0.1', 
-        db_proxy_port, 
-        f'/ws/{DB_NAME}', 
-        server_secret=os.environ['RPC_SECRET'],
-        namespace=f'{DB_NAME}'
+    server.db = await Database.create(
+        DB_URL=DB_URL,
+        tables=[
+            Users,
+            Services,
+            Groups,
+            Roles,
+            Actions,
+            Tokens,
+            PendingUsers,
+            EmailConfig,
+            OauthConfig,
+        ],
+        logger=server.log
     )
 
-    # check for completeness of db setup
-    while not 'liveness' in server.db.tables:
-        server.log.warning(f"waiting for db setup to complete")
-        await asyncio.sleep(2)
-    
-    if not server.leader:
-        while not 'users' in server.db.tables:
-            server.log.warning(f"waiting for leader to complete - db setup")
-            await asyncio.sleep(2)
+    await tables_setup(server)

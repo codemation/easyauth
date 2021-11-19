@@ -6,6 +6,8 @@ from inspect import signature, Parameter
 
 
 class EasyAuthAPIRouter:
+    parent = None
+
     def __init__(self,
         parent, # EasyAuthClient or EasyAuthServer,
         api_router: APIRouter,
@@ -15,13 +17,12 @@ class EasyAuthAPIRouter:
         self.log = parent.log
     @classmethod
     def create(cls,
-        parent, # EasyAuthClient
         *args, 
         **kwargs
     ):
         api_router = APIRouter(*args, **kwargs)
         auth_api_router = cls(
-            parent,
+            cls.parent,
             api_router
         )
         return auth_api_router
@@ -96,7 +97,6 @@ class EasyAuthAPIRouter:
                         return response
                 try:
                     token = self.parent.decode_token(token)[1]
-                    self.parent.log.debug(f"decoded token: {token}")
                 except Exception:
                     self.parent.log.exception(f"error decoding token")
                     if response_class is HTMLResponse:

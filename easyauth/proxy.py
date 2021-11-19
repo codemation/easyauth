@@ -41,8 +41,7 @@ def manager_proxy_setup(server):
                     continue
                 try:
                     result = await client_methods[method](action, store, key, value)
-                    log.warning(f"{result}")
                 except Exception as e:
-                    log.exception(f"error")
+                    log.exception(f"error with {method} on k: {key} - v: {value} in {store}")
 
             return "global_store_update - completed"
