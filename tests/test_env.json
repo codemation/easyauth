@@ -1,9 +1,0 @@
-{
-    "DB_TYPE": "sqlite",
-    "DB_NAME": "auth",
-    "ISSUER": "EasyAuth",
-    "SUBJECT": "EasyAuth",
-    "AUDIENCE": "EasyAuthApis",
-    "KEY_PATH": "/home/codemation/Documents/python/easyauth/EasyAuth",
-    "KEY_NAME": "test_key"
-}
