@@ -1,0 +1,9 @@
+{
+    "DB_TYPE": "sqlite",
+    "DB_NAME": "tests/auth.db",
+    "ISSUER": "EasyAuth",
+    "SUBJECT": "EasyAuth",
+    "AUDIENCE": "EasyAuthApis",
+    "KEY_PATH": "/home/josh/python/easyauth",
+    "KEY_NAME": "test_key"
+}

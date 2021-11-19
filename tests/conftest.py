@@ -23,7 +23,7 @@ async def auth_test_client():
             auth_secret='abcd1234',
             admin_title='EasyAuth - Company',
             admin_prefix='/admin',
-            env_from_file='server_sqlite.json'
+            env_from_file='tests/server_sqlite.json'
         )
 
         finance_auth_router = server.auth.create_api_router(prefix='/finance', tags=['finance'])
