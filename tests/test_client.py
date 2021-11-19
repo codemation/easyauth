@@ -8,8 +8,9 @@ server = FastAPI(openapi_url="/groups/openapi.json")
 @server.on_event('startup')
 async def startup():
     server.auth = await EasyAuthClient.create(
-        server, 
-        'http://0.0.0.0:8332/auth/token', # Should be a running EasyAuthServer 
+        server,
+        'http://0.0.0.0:8320/auth/token', # Should be a running EasyAuthServer 
+        auth_secret='abcd1234',
         env_from_file='client_env.json'
     )
 

@@ -7,7 +7,8 @@ server = FastAPI()
 @server.on_event('startup')
 async def startup():
     server.auth = await EasyAuthServer.create(
-        server, 
+        server,
         '/auth/token',
-        env_from_file='test_env.json'
+        auth_secret='abcd1234',
+        env_from_file='server_sqlite.json'
     )
