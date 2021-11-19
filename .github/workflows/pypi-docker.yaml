@@ -3,6 +3,7 @@ on:
   push:
     tags:
       - "*"
+jobs:
   package:
     needs: test-easyauth
     name: Release
