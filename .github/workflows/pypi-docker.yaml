@@ -5,7 +5,6 @@ on:
       - "*"
 jobs:
   package:
-    needs: test-easyauth
     name: Release
     runs-on: ubuntu-latest
     steps:
