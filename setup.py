@@ -4,14 +4,14 @@ BASE_REQUIREMENTS = [
     'makefun==1.9.5', 'PyJWT==2.0.0', 
     'python-jwt==3.3.0', 'fastapi>=0.65.2', 
     'uvicorn', 'python-multipart==0.0.5', 
-    'easyadmin>=0.167', 'easyrpc>=0.241',
+    'easyadmin==0.169', 'easyrpc==0.245',
 ]
 SERVER_REQUIREMENTS = [
-    'aiopyql>=0.357', 'cryptography', 
+    'pydbantic==0.0.12', 'cryptography==35.0.0', 
     'bcrypt==3.2.0', 'uvloop', 
-    'example', 'httptools',
-    'gunicorn', 'fastapi-mail==0.3.7',
-    'email_validator', 'google-api-python-client'
+    'example==0.1.0', 'httptools==0.3.0',
+    'gunicorn==20.1.0', 'fastapi-mail==0.3.7',
+    'email-validator==1.1.3', 'google-api-python-client==2.31.0'
 ]
 CLIENT_REQUIREMENTS = []
 
