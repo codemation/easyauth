@@ -61,7 +61,7 @@ async def startup():
         auth_secret='abcd1234',
         admin_title='EasyAuth - Company',
         admin_prefix='/admin',
-        env_from_file='server_sqlite.json'
+        env_from_file='server_env.json'
     )
 
 ```
