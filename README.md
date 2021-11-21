@@ -1,7 +1,7 @@
 ![](./images/logo_t.png)
 <br>
 #
-Create a centralized Authentication and Authorization token server. Easily secure FastAPI endpoints based on Users, Groups, Roles or Permissions with very little database usage.
+Create a centralized Authentication and Authorization token server. Easily secure FastAPI endpoints based on Users, Groups, Roles or Permissions to minimize database access requirements of Auth. 
 
 [![Documentation Status](https://readthedocs.org/projects/easyauth/badge/?version=latest)](https://easyauth.readthedocs.io/en/latest/?badge=latest) [![PyPI version](https://badge.fury.io/py/easy-auth.svg)](https://pypi.org/project/easy-auth/)
 
@@ -10,11 +10,12 @@ Create a centralized Authentication and Authorization token server. Easily secur
 [https://easyauth.readthedocs.io/en/latest/](https://easyauth.readthedocs.io/en/latest/)
 
 ## Key Features
-- Centralized Authentication - Create Users / Groups / Roles / Actions once, use everywhere. 
-- Admin GUI 
-- JWT Token Authentication with RSA private / public key verification
-- Easily backup / restore configration
-- Builtin client login & cookie system
+- Centralized Auth - Single location for Users & Permissions to share across apps
+- Granular Endpoint Security - Verify user identity, and define explicitly who and what each user or groups of users may access
+- Admin GUI - easy management of users, permissions, tokens, oauth and more!
+- Advanced JWT - Token Based Client authorization with built in invalidation capabilities
+- Google Oauth - Easy to configure google login
+- Integrated Login & Cookie Management - Users are not just authenticated and authorized, they are re-directed on token expiration to login pages via cookie system and sent back to last location afterwards  
 
 ## Quick Start
 ```bash
@@ -80,8 +81,6 @@ from easyauth.client import EasyAuthClient
 
 server = FastAPI()
 
-@server.on_event('startup')
-async def startup():
 @server.on_event('startup')
 async def startup():
     server.auth = await EasyAuthClient.create(
