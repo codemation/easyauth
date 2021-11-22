@@ -210,7 +210,7 @@ class EasyAuthClient:
                     transform_id='RegisterUser'
                 )
             )
-        @server.post('/register', response_class=HTMLResponse, tags='User')
+        @server.post('/register', response_class=HTMLResponse, tags=['User'])
         async def admin_register_send(user_info: dict):
             return await auth_server.rpc_server['easyauth']['register_user'](
                 user_info
@@ -231,7 +231,7 @@ class EasyAuthClient:
                 )
             )
 
-        @server.post('/activate', response_class=HTMLResponse, tags='User')
+        @server.post('/activate', response_class=HTMLResponse, tags=['User'])
         async def admin_activate_send(activation_code: ActivationCode):
             return await auth_server.rpc_server['easyauth']['activate_user'](
                 activation_code.dict()
@@ -535,7 +535,14 @@ class EasyAuthClient:
             route(path, *args, **kwargs)(mock_function)
             return mock_function
         return auth_endpoint
-    def parse_permissions(self, users, groups, roles, actions):
+    def parse_permissions(self, users, groups, roles, actions, default_permissions):
+        """
+        returns permssions defined on a given endpoint if set
+        if unset
+            returns router dedfault permissions
+        if no router defaults
+            return EasyAuthClient default permissions
+        """
         permissions = {}
         if users:
             permissions['users'] = users
@@ -545,8 +552,9 @@ class EasyAuthClient:
             permissions['roles'] = roles
         if actions:
             permissions['actions'] = actions
+        
         if not permissions:
-            permissions = self.DEFAULT_PERMISSION
+            permissions = self.DEFAULT_PERMISSION if not default_permissions else default_permissions
         return permissions
         
     def get(

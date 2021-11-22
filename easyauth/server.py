@@ -883,7 +883,14 @@ class EasyAuthServer:
         return auth_endpoint
 
 
-    def parse_permissions(self, users, groups, roles, actions):
+    def parse_permissions(self, users, groups, roles, actions, default_permissions):
+        """
+        returns permssions defined on a given endpoint if set
+        if unset
+            returns router dedfault permissions
+        if no router defaults
+            return EasyAuthServer default permissions
+        """
         permissions = {}
         if users:
             permissions['users'] = users
@@ -894,7 +901,7 @@ class EasyAuthServer:
         if actions:
             permissions['actions'] = actions
         if not permissions:
-            permissions = self.DEFAULT_PERMISSION
+            permissions = self.DEFAULT_PERMISSION if not default_permissions else default_permissions
         return permissions
         
     def get(
