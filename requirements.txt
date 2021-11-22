@@ -1,4 +1,4 @@
-pydbantic==0.0.12
+pydbantic==0.0.13
 bcrypt==3.2.0
 python-jwt==3.3.0
 makefun==1.9.5
