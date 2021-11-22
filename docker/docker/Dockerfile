@@ -18,6 +18,9 @@ WORKDIR /root/app/easyauth
 
 RUN echo "adding requirements"
 RUN pip3 install -U -r requirements.txt
+RUN pip3 install -U pydbantic[sqlite]
+RUN pip3 install -U pydbantic[mysql]
+RUN pip3 install -U pydbantic[postgres]
 
 EXPOSE 8220
 
