@@ -1,10 +1,13 @@
-# marketing setup
-async def setup(router):
+from easyauth.router import EasyAuthAPIRouter
 
-    @router.get('/')
-    async def marketing_root():
-        return f"marketing_root"
-    
-    @router.get('/data')
-    async def marketing_data():
-        return f"marketing_data"
+marketing_router = EasyAuthAPIRouter.create(prefix='/marketing', tags=['marketing'])
+
+@marketing_router.get('/')
+async def marketing_root():
+    return f"marketing_root"
+
+@marketing_router.get('/data')
+async def marketing_data():
+    return f"marketing_data"
+
+print(f"marketing setup")

@@ -11,19 +11,24 @@ class EasyAuthAPIRouter:
     def __init__(self,
         parent, # EasyAuthClient or EasyAuthServer,
         api_router: APIRouter,
+        default_permissions: dict = None
     ):
         self.parent = parent
         self.server = api_router
+        self.parent.api_routers.append(self)
         self.log = parent.log
+        self.default_permissions = default_permissions
     @classmethod
     def create(cls,
+        default_permissions: dict = None,
         *args, 
         **kwargs
     ):
         api_router = APIRouter(*args, **kwargs)
         auth_api_router = cls(
             cls.parent,
-            api_router
+            api_router,
+            default_permissions
         )
         return auth_api_router
     def router(self, path, method, permissions: list, send_token: bool = False, *args, **kwargs):
@@ -172,7 +177,7 @@ class EasyAuthAPIRouter:
         *args, 
         **kwargs
     ):
-        permissions = self.parent.parse_permissions(users, groups, roles, actions)
+        permissions = self.parent.parse_permissions(users, groups, roles, actions, self.default_permissions)
         return self.router(path, 'get', permissions=permissions, send_token=send_token, *args, **kwargs)
     def post(
         self, 
@@ -185,7 +190,7 @@ class EasyAuthAPIRouter:
         *args, 
         **kwargs
     ):
-        permissions = self.parent.parse_permissions(users, groups, roles, actions)
+        permissions = self.parent.parse_permissions(users, groups, roles, actions, self.default_permissions)
         return self.router(path, 'post', permissions=permissions, send_token=send_token, *args, **kwargs)
     def update(
         self, 
@@ -198,7 +203,7 @@ class EasyAuthAPIRouter:
         *args, 
         **kwargs
     ):
-        permissions = self.parent.parse_permissions(users, groups, roles, actions)
+        permissions = self.parent.parse_permissions(users, groups, roles, actions, self.default_permissions)
         return self.router(path, 'udpate', permissions=permissions, send_token=send_token, *args, **kwargs)
     def delete(
         self, 
@@ -211,7 +216,7 @@ class EasyAuthAPIRouter:
         *args, 
         **kwargs
     ):
-        permissions = self.parent.parse_permissions(users, groups, roles, actions)
+        permissions = self.parent.parse_permissions(users, groups, roles, actions, self.default_permissions)
         return self.router(path, 'delete', permissions=permissions, send_token=send_token, *args, **kwargs)
     def put(
         self, 
@@ -224,7 +229,7 @@ class EasyAuthAPIRouter:
         *args, 
         **kwargs
     ):
-        permissions = self.parent.parse_permissions(users, groups, roles, actions)
+        permissions = self.parent.parse_permissions(users, groups, roles, actions, self.default_permissions)
         return self.router(path, 'put', permissions=permissions, send_token=send_token, *args, **kwargs)
     def patch(
         self, 
@@ -237,7 +242,7 @@ class EasyAuthAPIRouter:
         *args, 
         **kwargs
     ):      
-        permissions = self.parent.parse_permissions(users, groups, roles, actions)
+        permissions = self.parent.parse_permissions(users, groups, roles, actions, self.default_permissions)
         return self.router(path, 'patch', permissions=permissions, send_token=send_token, *args, **kwargs)
     def options(
         self, 
@@ -250,7 +255,7 @@ class EasyAuthAPIRouter:
         *args,
         **kwargs
     ):      
-        permissions = self.parent.parse_permissions(users, groups, roles, actions)
+        permissions = self.parent.parse_permissions(users, groups, roles, actions, self.default_permissions)
         return self.router(path, 'options', permissions=permissions, send_token=send_token, *args, **kwargs)
     def head(
         self, 
@@ -263,5 +268,5 @@ class EasyAuthAPIRouter:
         *args, 
         **kwargs
     ):      
-        permissions = self.parent.parse_permissions(users, groups, roles, actions)
+        permissions = self.parent.parse_permissions(users, groups, roles, actions, self.default_permissions)
         return self.router(path, 'head', permissions=permissions, send_token=send_token, *args, **kwargs)

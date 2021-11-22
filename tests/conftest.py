@@ -2,11 +2,10 @@ import os
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from easyauth import EasyAuthServer
+from easyauth.server import EasyAuthServer
+from easyauth.router import EasyAuthAPIRouter
 # import sub modules
-from .finance import finance
-from .hr import hr
-from .marketing import marketing
+
 
 @pytest.mark.asyncio
 @pytest.fixture()
@@ -26,17 +25,12 @@ async def auth_test_client():
             env_from_file='tests/server_sqlite.json'
         )
 
-        finance_auth_router = server.auth.create_api_router(prefix='/finance', tags=['finance'])
-        hr_auth_router = server.auth.create_api_router(prefix='/hr', tags=['hr'])
-        marketing_auth_router = server.auth.create_api_router(prefix='/marketing', tags=['marketing'])
+        from .finance import finance
+        from .hr import hr
+        from .marketing import marketing
 
-        # send auth routers to setup of each sub-module
-        await finance.setup(finance_auth_router)
-        await hr.setup(hr_auth_router)
-        await marketing.setup(marketing_auth_router)
-        #nothings
-
-        test_auth_router = server.auth.create_api_router(prefix='/testing', tags=['testing'])
+        #test_auth_router = server.auth.create_api_router(prefix='/testing', tags=['testing'])
+        test_auth_router = EasyAuthAPIRouter.create(prefix='/testing', tags=['testing'])
 
         # grants access to users matching default_permissions
         @test_auth_router.get('/default')
