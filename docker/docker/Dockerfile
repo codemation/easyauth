@@ -7,7 +7,7 @@ RUN apt-get install -y git
 
 RUN git clone https://github.com/codemation/easyauth.git
 
-FROM joshjamison/python38:v1
+FROM tiangolo/uvicorn-gunicorn-fastapi:python3.8
 # copy the repository form the previous image
 
 RUN mkdir -p /root/app
