@@ -10,5 +10,9 @@ async def startup():
         server,
         '/auth/token',
         auth_secret='abcd1234',
-        env_from_file='server_sqlite.json'
+        env_from_file='tests/server_sqlite.json'
     )
+
+    from tests.finance import finance
+    from tests.hr.hr import hr_router
+    from tests.marketing import marketing
