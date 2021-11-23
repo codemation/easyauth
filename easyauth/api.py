@@ -35,7 +35,7 @@ async def api_setup(server):
         access_token: str
         token_type: str
     
-    api_router = server.api_routers[0]
+    api_router = server.create_api_router()
 
     async def verify_user(user):
 

@@ -85,9 +85,6 @@ class EasyAuthServer:
 
         EasyAuthAPIRouter.parent = self
 
-        self.create_api_router()                            # API Router
-        self.create_api_router(prefix=self.ADMIN_PREFIX)    # ADMIN GUI Router
-
         if env_from_file:
             self.load_env_from_file(env_from_file)
 
