@@ -333,14 +333,14 @@ class EasyAuthServer:
                 os.environ[env] = value
 
     def setup_logger(self, logger=None, level=None):
-        if logger == None:
+        if logger is None:
             level = logging.DEBUG if level == 'DEBUG' else logging.WARNING
             logging.basicConfig(
                 level=level,
                 format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s',
                 datefmt='%m-%d %H:%M'
             )
-            self.log = logging.getLogger(f'EasyAuthServer')
+            self.log = logging.getLogger('EasyAuthServer')
             self.log.propogate = False
             self.log.setLevel(level)
         else:
