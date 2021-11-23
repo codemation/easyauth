@@ -29,13 +29,13 @@ async def startup():
     @server.auth.get('/', users=['jane'])
     async def root():
         return f"I am root"
-    
+
     # grants access to members of 'users' or 'admins' group.
     @server.auth.get('/groups', groups=['users', 'admins'])
     async def groups():
         return f"I am groups"
-    
-    # grants access to all members of 'users' group 
+
+    # grants access to all members of 'users' group
     # or a groups with role of 'basic' or advanced
     @server.auth.get('/roles', roles=['basic', 'advanced'], groups=['users'])
     async def roles():
@@ -50,10 +50,10 @@ async def startup():
     {'groups': ['administrators']}
 
 ### APIRouter
-FastAPI provides a [APIRouter](https://fastapi.tiangolo.com/tutorial/bigger-applications/?h=apirouter#apirouter) object for defining path prefixes, pre-defined dependencies, see fastapi docs for more details. EasyAuthClient can extend the main FastAPI router using the .create_api_router() method or EasyAuthAPIRouter.create(). 
+FastAPI provides a [APIRouter](https://fastapi.tiangolo.com/tutorial/bigger-applications/?h=apirouter#apirouter) object for defining path prefixes, pre-defined dependencies, see fastapi docs for more details. EasyAuthClient can extend the main FastAPI router using the .create_api_router() method or EasyAuthAPIRouter.create().
 
 !!! Important - "EasyAuthAPIRouter Considerations "
-    EasyAuthAPIRouter should be created after an `EasyAuthClient` or `EasyAuthServer` is created to ensure that the router are correctly included and visible in OpenAPI schema.  
+    EasyAuthAPIRouter should be created after an `EasyAuthClient` or `EasyAuthServer` is created to ensure that the router are correctly included and visible in OpenAPI schema.
 
 ```python
 from fastapi import FastAPI, Request, Depends
@@ -116,13 +116,13 @@ async def finance_data():
 ![](images/easyauthclient-apirouter.png)
 
 ### Permissions
-EasyAuth allows endpoints to be as exclusive or as inclusive as needed. Authorization is granted if user meets at least 1 condition. 
+EasyAuth allows endpoints to be as exclusive or as inclusive as needed. Authorization is granted if user meets at least 1 condition.
 ```python
 @server.auth.get(
-    '/roles', 
+    '/roles',
     roles=['basic'],  # OR
     groups=['users'], # OR
-    actions=['CREATE_BASIC'] 
+    actions=['CREATE_BASIC']
 )
 ```
 
