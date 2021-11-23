@@ -201,7 +201,6 @@ class EasyAuthServer:
             server_secret=auth_secret
         )
 
-        print(f"admin prefix: {admin_prefix}")
         auth_server = cls(
             server,
             token_url,
