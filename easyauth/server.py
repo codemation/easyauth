@@ -153,23 +153,25 @@ class EasyAuthServer:
         async def handle_401_403(request, call_next):
             response = await call_next(request)
             request_dict = dict(request)
-            if response.status_code in [401, 404]:
-                if 'text/html' in request.headers['accept']:
-                    if response.status_code == 404:
-                        return HTMLResponse(
-                            self.admin.not_found_page(),
-                            status_code=404
-                        )
-                    response = HTMLResponse(
-                        await self.get_login_page(
-                            message='Login Required',
-                            request=request
-                        ),
-                        status_code=401
+            if (
+                response.status_code in [401, 404]
+                and 'text/html' in request.headers['accept']
+            ):
+                if response.status_code == 404:
+                    return HTMLResponse(
+                        self.admin.not_found_page(),
+                        status_code=404
                     )
-                    response.set_cookie('token', 'INVALID')
-                    response.set_cookie('ref', request.__dict__['scope']['path'])
-                    
+                response = HTMLResponse(
+                    await self.get_login_page(
+                        message='Login Required',
+                        request=request
+                    ),
+                    status_code=401
+                )
+                response.set_cookie('token', 'INVALID')
+                response.set_cookie('ref', request.__dict__['scope']['path'])
+
             if response.status_code == 500:
                 self.log.error(f"Internal error - 500 - with request: {request.__dict__}")
             return response
@@ -350,7 +352,6 @@ class EasyAuthServer:
         try:
             with open(f"{os.environ['KEY_PATH']}/{os.environ['KEY_NAME']}.key", 'r') as k:
                 self._privkey = jwk.JWK.from_json(k.readline())
-                pass
         except Exception:
             # create private / public keys
             self._privkey = jwk.JWK.generate(kty='RSA', size=2048)
@@ -574,13 +575,12 @@ class EasyAuthServer:
             ['RS256']
         )
     def encode(self, minutes=60, days=0, **kw):
-        encoded = jwt.generate_jwt(
+        return jwt.generate_jwt(
             kw,
             self._privkey,
             'RS256', 
             datetime.timedelta(minutes=minutes, days=days)
         )
-        return encoded
     
 
     def decode(self, encoded):
