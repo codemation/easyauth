@@ -103,16 +103,16 @@ class EasyAuthServer:
     
         @server.on_event('startup')
         async def setup():
-            self.log.warning(f"adding routers")
+            self.log.warning('adding routers')
             await self.include_routers()
 
         @server.on_event('shutdown')
         async def shutdown_auth_server():
-            self.log.warning(f"EasyAuthServer - Starting shutdown process!")
+            self.log.warning('EasyAuthServer - Starting shutdown process!')
             if self.leader:
                 shutdown_proxies = f"for pid in $(ps aux | grep {manager_proxy_port}' | awk '{{print $2}}'); do kill $pid; done"
                 os.system(shutdown_proxies)
-            self.log.warning(f"EasyAuthServer - Finished shutdown process!")
+            self.log.warning('EasyAuthServer - Finished shutdown process!')
 
         @server.middleware('http')
         async def detect_token_in_cookie(request, call_next):
@@ -382,22 +382,17 @@ class EasyAuthServer:
             </div>
         """
         logout_modal = modal.get_modal(
-            f'logoutModal',
+            'logoutModal',
             alert='Ready to Leave',
             body=buttons.get_button(
-                'Go Back',
-                color='success',
-                href=f'{self.ADMIN_PREFIX}/'
-            ) +
-            scripts.get_google_signout_script() + 
-            buttons.get_button(
-                'Log out',
-                color='danger',
-                onclick='signOut()'
-            ),
+                'Go Back', color='success', href=f'{self.ADMIN_PREFIX}/'
+            )
+            + scripts.get_google_signout_script()
+            + buttons.get_button('Log out', color='danger', onclick='signOut()'),
             footer='',
-            size='sm'
+            size='sm',
         )
+
         return admin.get_admin_page(
             name='', 
             sidebar=self.admin.sidebar,
@@ -454,7 +449,7 @@ class EasyAuthServer:
             send_activation_emails=send_activation_emails, 
         )
 
-        return f"email setup completed"
+        return 'email setup completed'
 
 
     async def get_email_config(self) -> EmailConfig:
@@ -495,8 +490,8 @@ class EasyAuthServer:
             try:
                 return await fm.send_message(message)
             except Exception as e:
-                self.log.exception(f"Error sending email")
-                return f"Error Sending Email - {repr(e)}"
+                self.log.exception('Error sending email')
+                return f'Error Sending Email - {repr(e)}'
 
         fm = FastMail(conf)
         if not test_email:
@@ -643,12 +638,11 @@ class EasyAuthServer:
             # verify OAuth2 type
             google_client_type = request.headers.get("X-Google-OAuth2-Type")
 
-            if google_client_type == 'client':
-                body_bytes = await request.body()
-                auth_code = jsonable_encoder(body_bytes)
-            else:
+            if google_client_type != 'client':
                 raise GoogleOauthHeaderMalformed
 
+            body_bytes = await request.body()
+            auth_code = jsonable_encoder(body_bytes)
         try:
             idinfo = id_token.verify_oauth2_token(
                 auth_code, 
@@ -663,12 +657,11 @@ class EasyAuthServer:
                 raise HTTPException(status_code=400, detail="Unable to validate social login")
 
         except Exception as e:
-            self.log.exception(f"error validating social login")
-            raise HTTPException(status_code=400, detail="Unable to validate social login")
-
+            self.log.exception('error validating social login')
+            raise HTTPException(status_code=400, detail='Unable to validate social login')
         # verify user exists
         user = await Users.filter(email=email)
-        
+
         if not user:
             # does not exist, create
             result = await self.register_user(
@@ -698,19 +691,20 @@ class EasyAuthServer:
 
         if user:
             if user.account_type == 'service':
-                raise HTTPException(status_code=401, detail=f"unable to login with service accounts")
+                raise HTTPException(
+                    status_code=401, detail='unable to login with service accounts'
+                )
+
             try:
                 try:
                     if not self.is_password_valid(user.password, password):
                         return None
                     return user
                 except ValueError as e:
-                    self.log.exception(f"error validating user_pw")
-                    pass
-                
+                    self.log.exception('error validating user_pw')
                 return user
             except Exception as e:
-                self.log.error(f"Auth failed for user {user.username} - invalid credentials")
+                self.log.error(f'Auth failed for user {user.username} - invalid credentials')
         return None
 
     async def get_user_permissions(self, username: str) -> dict:
