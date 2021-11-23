@@ -35,28 +35,28 @@ async def auth_test_client():
         # grants access to users matching default_permissions
         @test_auth_router.get('/default')
         async def default():
-            return f"I am default"
+            return 'I am default'
 
         # grants access to only specified users
         @test_auth_router.get('/', users=['john'])
         async def root():
-            return f"I am root"
+            return 'I am root'
 
         # grants access to members of 'users' or 'admins' group.
         @test_auth_router.get('/groups', groups=['basic_users', 'admins'])
         async def groups():
-            return f"I am groups"
+            return 'I am groups'
 
         # grants access to all members of 'users' group 
         # or a groups with role of 'basic' or advanced
         @test_auth_router.get('/roles', roles=['basic', 'advanced'], groups=['users'])
         async def roles():
-            return f"Roles and Groups"
+            return 'Roles and Groups'
 
         # grants access to all members of groups with a roles granting 'BASIC_CREATE'
         @test_auth_router.get('/actions', actions=['BASIC_CREATE'])
         async def action():
-            return f"I am actions"
+            return 'I am actions'
 
     with TestClient(server) as test_client:
         yield test_client

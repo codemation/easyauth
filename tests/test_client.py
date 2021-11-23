@@ -17,17 +17,17 @@ async def startup():
     # grants access to only specified users
     @server.auth.get('/', users=['jane'])
     async def root():
-        return f"I am root"
+        return 'I am root'
     
     # grants access to members of 'users' or 'admins' group.
     @server.auth.get('/groups', groups=['users', 'admins'])
     async def groups():
-        return f"I am groups"
+        return 'I am groups'
     
     # grants access to all members of group which a role of 'basic' or advanced, or member 'users' group
     @server.auth.get('/roles', roles=['basic', 'advanced'], groups=['users'])
     async def roles():
-        return f"I am roles"
+        return 'I am roles'
 
     # grants access to all members of groups with a roles granting 'BASIC_CREATE'
     # accesssing the auth token 
