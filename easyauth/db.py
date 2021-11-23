@@ -20,8 +20,7 @@ from easyauth.models import (
 import random, string
 def get_random_string(length):
     letters = string.ascii_lowercase
-    result_str = ''.join(random.choice(letters) for i in range(length))
-    return result_str
+    return ''.join(random.choice(letters) for i in range(length))
 
 async def database_setup(server):
     """
@@ -35,13 +34,13 @@ async def database_setup(server):
     await quorum_setup(server)
     DB_TYPE = None
 
-    assert 'DB_TYPE' in os.environ, f"missing required DB_TYPE env variable"
-    assert 'DB_NAME' in os.environ, f"missing required DB_NAME env variable"
+    assert 'DB_TYPE' in os.environ, 'missing required DB_TYPE env variable'
+    assert 'DB_NAME' in os.environ, 'missing required DB_NAME env variable'
 
     DB_TYPE = os.environ['DB_TYPE']
     DB_NAME = os.environ['DB_NAME']
-    
-    if not DB_TYPE == 'sqlite':
+
+    if DB_TYPE != 'sqlite':
         conf = {}
         for env in {'DB_TYPE', 'DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASSWORD'}:
             assert env in os.environ, f"missing required {env} env variable"
@@ -49,7 +48,7 @@ async def database_setup(server):
 
         DB_URL = f"{conf['DB_TYPE']}://{conf['DB_USER']}:{conf['DB_PASSWORD']}@{conf['DB_HOST']}/{conf['DB_NAME']}"
     else:
-         DB_URL = f"{DB_TYPE}:///{DB_NAME}"
+        DB_URL = f"{DB_TYPE}:///{DB_NAME}"
 
 
     server.db = await Database.create(

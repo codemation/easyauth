@@ -98,7 +98,7 @@ async def api_setup(server):
                 await _role.save()
                 for action in role['permissions']['actions']:
                     await verify_action(action)
-        
+
         if 'groups' in config:
             for group in config['groups']:
                 group = dict(group)
@@ -115,7 +115,7 @@ async def api_setup(server):
                 _user = Users(**user)
                 await _user.save()
 
-        return f"import_auth_config - completed"
+        return 'import_auth_config - completed'
 
     @api_router.get('/auth/serviceaccount/token/{service}', response_model=Token, tags=['Token'])
     async def get_service_account_token(service: str):
@@ -124,7 +124,7 @@ async def api_setup(server):
         if service_user is None:
             raise HTTPException(status_code=404, detail=f"no service user with name {service} exists")
 
-        if not service_user['account_type'] == 'service':
+        if service_user['account_type'] != 'service':
             raise HTTPException(status_code=400, detail=f"user {service} is not a service type account")
 
         permissions = await server.get_user_permissions(service)
@@ -140,7 +140,7 @@ async def api_setup(server):
     @server.server.delete('/auth/token', tags=['Token'])
     async def revoke_access_token(token_id: str):
         await server.revoke_token(token_id)
-        return f"token revoked"
+        return 'token revoked'
     
 
     @api_router.get('/auth/oauth', response_model=List[OauthConfig])
@@ -341,7 +341,7 @@ async def api_setup(server):
         sends activation email for user. 
         """
         # check default groups assignment
-        if not 'groups' in user_info or not user_info['groups']:
+        if 'groups' not in user_info or not user_info['groups']:
             easyauth_provider = await OauthConfig.filter(
                 provider='easyauth'
             )
@@ -362,21 +362,21 @@ async def api_setup(server):
                 password=user_info['password'],
                 full_name=user_info['full name'],
                 email=user_info['email address'],
-                groups=user_info['groups'] if 'groups' in user_info else []
+                groups=user_info.get('groups', []),
             )
+
         except ValueError as e:
             raise HTTPException(
-                status_code=422,
-                detail=f"{str(repr(e))} - error registering user"
+                status_code=422, detail=f'{repr(e)} - error registering user'
             )
-        
+
         # check for duplicate user
         duplicate = await Users.get(username=user_info['username'])
         if duplicate:
             raise DuplicateUserError(duplicate[0]['username'])
 
         email_config = await EmailConfig.all()
-        
+
         if email_config and email_config[0]['send_activation_emails']:
 
             # generate activation code
@@ -404,13 +404,13 @@ async def api_setup(server):
     @api_router.put('/auth/user', status_code=201, tags=['Users'])
     async def create_user(user: UsersInput, response_type: str = None):
         response = await __create_user(user)
-        if not response_type == 'html':
+        if response_type != 'html':
             return response
         return 
         
     async def __create_user(user: Users):
 
-        if not await Users.get(username=user.username) is None:
+        if await Users.get(username=user.username) is not None:
             raise HTTPException(status_code=400, detail=f"{user['username']} already exists")
 
         user_groups = [
@@ -434,14 +434,14 @@ async def api_setup(server):
     @api_router.put('/auth/service', status_code=201, actions=['CREATE_USER'], tags=['Users'])
     async def create_service(service: UsersInput):
 
-        if not await Services.get(username=service.username) is None:
+        if await Services.get(username=service.username) is not None:
             raise HTTPException(status_code=400, detail=f"{service.username} already exists")
 
         user_groups = [
             await verify_group(group)
             for group in user.groups
         ]
-        
+
         service = service.dict()
         service['account_type'] = 'service'
         service['groups'] = user_groups
@@ -467,8 +467,8 @@ async def api_setup(server):
     ):
 
         user_to_update = await verify_user(username)
-        
-        update = {k: v for k, v in dict(update).items() if not v is None}
+
+        update = {k: v for k, v in dict(update).items() if v is not None}
 
         to_update = {}
         for k, v in update.copy().items():
@@ -481,7 +481,7 @@ async def api_setup(server):
                 to_update[k] = user_groups
             else:
                 to_update[k] = v
-                
+
         update = to_update
 
         if "password" in update:
@@ -522,7 +522,7 @@ async def api_setup(server):
 
     @api_router.put('/auth/group', status_code=201, tags=['Groups'])
     async def create_group(group: GroupsInput):
-        if not await Groups.get(group_name=group.group_name) is None:
+        if await Groups.get(group_name=group.group_name) is not None:
             raise HTTPException(status_code=400, detail=f"{group.group_name} already exists")
 
         roles_in_group = [
@@ -573,9 +573,9 @@ async def api_setup(server):
     @api_router.put('/auth/role', status_code=201, tags=['Roles'])
     async def create_role(role: RolesInput):
 
-        if not await Roles.get(role=role.role) is None:
+        if await Roles.get(role=role.role) is not None:
             raise HTTPException(status_code=400, detail=f"{role.role} already exists")
-        
+
         actions_in_role = [
             await verify_action(action)
             for action in role.actions
@@ -585,7 +585,7 @@ async def api_setup(server):
             role = role.role,
             actions=actions_in_role
         )
-        
+
         return f"role {role.role} created"
 
     class UpdateActions(BaseModel):
@@ -626,7 +626,7 @@ async def api_setup(server):
 
     @api_router.put('/auth/actions', status_code=201, tags=['Actions'])
     async def create_permission(action: Actions):
-        if not await Actions.get(action=action.action) is None:
+        if await Actions.get(action=action.action) is not None:
             raise HTTPException(status_code=400, detail=f"{action.action} already exists")
 
         await action.insert()

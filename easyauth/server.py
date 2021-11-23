@@ -123,9 +123,8 @@ class EasyAuthServer:
             cookie_ind = None
 
             for i, header in enumerate(request_dict['headers']):
-                if 'authorization' in header[0].decode():
-                    if not header[1] is None:
-                        auth_ind = i
+                if 'authorization' in header[0].decode() and header[1] is not None:
+                    auth_ind = i
                 if 'cookie' in header[0].decode():
                     cookie_ind = i
                     cookies = header[1].decode().split(',')
@@ -133,21 +132,20 @@ class EasyAuthServer:
                         key, value = cookie.split('=')
                         if key == 'token':
                             token_in_cookie = value
-            if token_in_cookie and not token_in_cookie == 'INVALID':
+            if token_in_cookie and token_in_cookie != 'INVALID':
                 if auth_ind:
                     request_dict['headers'].pop(auth_ind)
-                if not request_dict['path'] == '/login':
+                if request_dict['path'] != '/login':
                     request_dict['headers'].append(
                         ('authorization'.encode(), f'bearer {token_in_cookie}'.encode())
                     )
                 else:
                     return RedirectResponse('/logout')
-            else:
-                if not request_dict['path'] == '/login':
-                    token_in_cookie = 'NO_TOKEN' if not token_in_cookie else token_in_cookie
-                    request_dict['headers'].append(
-                        ('authorization'.encode(), f'bearer {token_in_cookie}'.encode())
-                    )
+            elif request_dict['path'] != '/login':
+                token_in_cookie = 'NO_TOKEN' if not token_in_cookie else token_in_cookie
+                request_dict['headers'].append(
+                    ('authorization'.encode(), f'bearer {token_in_cookie}'.encode())
+                )
 
             return await call_next(request)
         
@@ -253,14 +251,13 @@ class EasyAuthServer:
             actions:
                 - put|update|delete
             """
-            if not store in auth_server.store:
+            if store not in auth_server.store:
                 auth_server.store[store] = {}
             if action in {'update', 'put'}:
                 auth_server.store[store][key] = value
-            else:
-                if key in auth_server.store[store]:
-                    del auth_server.store[store][key]
-            
+            elif key in auth_server.store[store]:
+                del auth_server.store[store][key]
+
             return f"{action} in {store} with {key} completed"
 
         store_data.__name__ = store_data.__name__ + '_'.join(
@@ -623,11 +620,11 @@ class EasyAuthServer:
         providers = await OauthConfig.all()
         providers = [p for p in providers if p.enabled]
 
-        identity_providers = {
-            idp.provider: idp.client_id 
-            for idp in providers if not idp.provider == 'easyauth'
+        return {
+            idp.provider: idp.client_id
+            for idp in providers
+            if idp.provider != 'easyauth'
         }
-        return identity_providers
 
     async def generate_google_oauth_token(self, request = None, auth_code=None):
         """
@@ -728,18 +725,18 @@ class EasyAuthServer:
         for group in user.groups:
             for role in group.roles:
                 for action in role.actions:
-                    if not 'actions' in permissions:
+                    if 'actions' not in permissions:
                         permissions['actions'] = []
-                    
-                    if not action in permissions['actions']:
+
+                    if action not in permissions['actions']:
                         permissions['actions'].append(action.action)
-                if not 'roles' in permissions:
+                if 'roles' not in permissions:
                     permissions['roles'] = []
-                if not role in permissions['roles']:
+                if role not in permissions['roles']:
                     permissions['roles'].append(role.role)
-            if not 'groups' in permissions:
+            if 'groups' not in permissions:
                 permissions['groups'] = []
-            if not group in permissions['groups']:
+            if group not in permissions['groups']:
                 permissions['groups'].append(group.group_name)
         permissions['users'] = [user.username]
         return permissions
@@ -801,24 +798,26 @@ class EasyAuthServer:
             async def mock_function(*args, **kwargs):
                 request = kwargs['request']
                 token = kwargs['token']
-                if token ==  'NO_TOKEN':
-                    if response_class is HTMLResponse or 'text/html' in request.headers['accept']:
-                        response = HTMLResponse(
-                            await self.get_login_page(
-                                message='Login Required',
-                                request=request
-                            ),
-                            status_code=401
-                        )
-                        response.set_cookie('token', 'INVALID')
-                        response.set_cookie('ref', request.__dict__['scope']['path'])
-                        return response
+                if token == 'NO_TOKEN' and (
+                    response_class is HTMLResponse
+                    or 'text/html' in request.headers['accept']
+                ):
+                    response = HTMLResponse(
+                        await self.get_login_page(
+                            message='Login Required',
+                            request=request
+                        ),
+                        status_code=401
+                    )
+                    response.set_cookie('token', 'INVALID')
+                    response.set_cookie('ref', request.__dict__['scope']['path'])
+                    return response
 
 
                 try:
                     token = self.decode_token(token)[1]
                 except Exception:
-                    self.log.error(f"error decoding token")
+                    self.log.error('error decoding token')
                     if response_class is HTMLResponse:
                         response = HTMLResponse(
                             await self.get_login_page(
@@ -830,22 +829,25 @@ class EasyAuthServer:
                         response.set_cookie('token', 'INVALID')
                         response.set_cookie('ref', request.__dict__['scope']['path'])
                         return response
-                    raise HTTPException(status_code=401, detail=f"not authorized, invalid or expired")
+                    raise HTTPException(
+                        status_code=401, detail='not authorized, invalid or expired'
+                    )
+
 
                 allowed = False
-                
+
                 for auth_type, values in permissions.items():
-                    if not auth_type in token['permissions']:
+                    if auth_type not in token['permissions']:
                         self.log.warning(f"{auth_type} is required")
                         continue
                     for value in values:
                         if value in token['permissions'][auth_type]:
                             allowed = True
                             break
-                if not token['token_id'] in self.store['tokens']:
+                if token['token_id'] not in self.store['tokens']:
                     self.log.error(f"token for user {token['permissions']['user'][0]} used is unknown / revoked")
                     allowed = False
-                
+
                 if not allowed:
                     if response_class is HTMLResponse:
                         response = HTMLResponse(
@@ -865,7 +867,7 @@ class EasyAuthServer:
                     del kwargs['token']
                 if not send_request:
                     del kwargs['request']
-                
+
                 result = func(*args, **kwargs)
                 if asyncio.iscoroutine(result): 
                     return await result

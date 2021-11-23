@@ -123,7 +123,7 @@ async def tables_setup(server):
     log = server.log
     db = server.db
 
-    new_user = not len(await Users.all()) > 0
+    new_user = len(await Users.all()) <= 0
 
     if new_user and server.leader:
         random_password = server.generate_random_string(8)
