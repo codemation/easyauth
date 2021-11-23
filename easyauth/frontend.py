@@ -20,7 +20,8 @@ async def frontend_setup(server):
 
     log = server.log
 
-    admin_gui = server.api_routers[1]
+    #admin_gui = server.api_routers[1]
+    admin_gui = server.create_api_router(prefix=server.ADMIN_PREFIX)    # ADMIN GUI Router
     admin_prefix = server.ADMIN_PREFIX
 
     server.admin = Admin(

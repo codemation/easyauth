@@ -85,9 +85,6 @@ class EasyAuthServer:
 
         EasyAuthAPIRouter.parent = self
 
-        self.create_api_router()                            # API Router
-        self.create_api_router(prefix=self.ADMIN_PREFIX)    # ADMIN GUI Router
-
         if env_from_file:
             self.load_env_from_file(env_from_file)
 
@@ -204,6 +201,7 @@ class EasyAuthServer:
             server_secret=auth_secret
         )
 
+        print(f"admin prefix: {admin_prefix}")
         auth_server = cls(
             server,
             token_url,
