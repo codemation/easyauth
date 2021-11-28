@@ -40,7 +40,7 @@ def manager_proxy_setup(server):
             client_methods = manager['clients']
             log.warning(f"triggering global_store_update for {client_methods}")
             for method in client_methods:
-                if method in 'get_store_data': 
+                if method == 'get_store_data': 
                     continue
                 if 'token_cleanup' in method:
                     continue 
