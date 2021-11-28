@@ -240,10 +240,16 @@ class EasyAuthServer:
                     continue
                 await clients[client](action, store, key, value)
             return f"client_update completed"
+        
+        async def token_cleanup():
+            return await auth_server.token_cleanup()
 
-        client_update.__name__ = client_update.__name__ + '_'.join(
-            str(uuid.uuid4()).split('-')
-        )
+        client_id = '_'.join(str(uuid.uuid4()).split('-'))
+
+        client_update.__name__ = client_update.__name__ + client_id
+        token_cleanup.__name__ = token_cleanup.__name__ + client_id
+
+
 
         # initialize global storage
         auth_server.store = {'tokens': {}}
@@ -263,9 +269,7 @@ class EasyAuthServer:
             
             return f"{action} in {store} with {key} completed"
 
-        store_data.__name__ = store_data.__name__ + '_'.join(
-            str(uuid.uuid4()).split('-')
-        )
+        store_data.__name__ = store_data.__name__ + client_id
 
         rpc_server.origin(store_data, namespace='global_store')
 
@@ -276,6 +280,7 @@ class EasyAuthServer:
 
         # register unique client_update in clients namespace
         rpc_server.origin(client_update, namespace='clients')
+        rpc_server.origin(token_cleanup, namespace='clients')
 
         # create connection to manager on 'manager' and 'clients' namespace
         await rpc_server.create_server_proxy(
@@ -533,6 +538,21 @@ class EasyAuthServer:
             key=token_id,
             value=''
         )
+
+    async def token_cleanup(self):
+        """
+        check & delete expired tokens
+        """
+        all_tokens = await Tokens.all()
+        revoked_tokens = [
+            {
+                token.token_id: await self.revoke_token(token.token_id) 
+            } for token in all_tokens 
+            if datetime.datetime.now() > datetime.datetime.fromisoformat(token.expiration)
+        ]
+
+        return revoked_tokens
+
 
     async def issue_token(self, permissions, minutes=60, hours=0, days=0):
 
