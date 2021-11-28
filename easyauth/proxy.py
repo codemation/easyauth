@@ -1,5 +1,7 @@
 import os
+import asyncio
 from easyrpc.server import EasyRpcServer
+from easyschedule import EasyScheduler
 
 def manager_proxy_setup(server):
 
@@ -29,6 +31,7 @@ def manager_proxy_setup(server):
             **rpc_config
         )
         log = manager.log
+        manager.scheduler = EasyScheduler()
 
         @manager.origin(namespace='manager')
         async def global_store_update(action, store, key, value):
@@ -39,9 +42,29 @@ def manager_proxy_setup(server):
             for method in client_methods:
                 if method == 'get_store_data': 
                     continue
+                if 'token_cleanup' in method:
+                    continue 
+
                 try:
                     result = await client_methods[method](action, store, key, value)
                 except Exception as e:
                     log.exception(f"error with {method} on k: {key} - v: {value} in {store}")
 
             return "global_store_update - completed"
+        
+        @manager.scheduler(schedule='*/15 * * * *')
+        async def global_token_cleanup():
+            """
+            triggers check and cleanup of expired tokens
+            """
+            client_methods = manager['clients']
+            log.debug(f"triggering global_token_cleanup for {client_methods}")
+            for method in client_methods:
+                if not 'token_cleanup' in method:
+                    continue
+                result = await client_methods[method]()
+                log.debug(f"global_token_cleanup: cleaned {len(result)} expired tokens")
+                break
+        
+        # start scheduler in background
+        asyncio.create_task(manager.scheduler.start())

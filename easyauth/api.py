@@ -1,3 +1,4 @@
+import json
 from typing import Optional, List
 from pydantic import BaseModel
 from starlette.status import HTTP_302_FOUND
@@ -164,7 +165,12 @@ async def api_setup(server):
         return f"{provider} OAuth Configured"
 
     @server.server.post('/auth/token/oauth/google', include_in_schema=False)
-    async def create_google_oauth_token_api(request: Request, response: Response):
+    async def create_google_oauth_token_api(
+        request: Request, 
+        response: Response,
+        redirect: bool = True,
+        include_token: bool = False 
+    ):
         token = await server.generate_google_oauth_token(request)
         # add token to cookie
         response.set_cookie('token', token)
@@ -175,8 +181,19 @@ async def api_setup(server):
             redirect_ref = request.cookies['ref']
             response.delete_cookie('ref')
 
-        return RedirectResponse(redirect_ref, headers=response.headers, status_code=HTTP_302_FOUND)
-
+        if redirect:
+            return RedirectResponse(redirect_ref, headers=response.headers, status_code=HTTP_302_FOUND)
+        # not redirecting 
+        
+        decoded_token = server.decode_token(token)[1]
+        response_body = {'exp': decoded_token['exp'], 'auth': True}
+        if include_token:
+            response_body['token'] = token
+        return HTMLResponse(
+            content=json.dumps(response_body), 
+            status_code=200, 
+            headers=response.headers
+        )
 
     @server.server.post('/auth/token/refresh', response_model=Token, tags=['Token'])
     async def refresh_access_token(token: str = Depends(server.oauth2_scheme)):
