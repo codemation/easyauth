@@ -9,6 +9,7 @@ BASE_REQUIREMENTS = [
 SERVER_REQUIREMENTS = [
     'pydbantic>=0.0.14', 'cryptography==35.0.0', 
     'bcrypt==3.2.0', 'uvloop', 
+    'easyschedule==0.107',
     'example==0.1.0', 'httptools==0.3.0',
     'gunicorn==20.1.0', 'fastapi-mail==0.3.7',
     'email-validator==1.1.3', 'google-api-python-client==2.31.0'
