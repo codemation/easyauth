@@ -88,7 +88,7 @@ class EasyAuthAPIRouter:
             async def mock_function(*args, **kwargs):
                 request = kwargs['request']
                 token = kwargs['token']
-                if token ==  'NO_TOKEN':
+                if token ==  'NO_TOKEN' or token == 'INVALID':
                     if response_class is HTMLResponse or 'text/html' in request.headers['accept']:
                         response = HTMLResponse(
                             await self.parent.get_login_page(

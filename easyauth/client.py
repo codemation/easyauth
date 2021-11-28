@@ -238,7 +238,14 @@ class EasyAuthClient:
             )
 
         @server.post('/auth/token/oauth/google', include_in_schema=False)
-        async def create_google_oauth_token(request: Request, response: Response, redirect: bool = True):
+        async def create_google_oauth_token(
+            request: Request, 
+            response: Response, 
+            redirect: bool = True,
+            include_token: bool = False,
+        ):
+
+
             google_client_type = request.headers.get("X-Google-OAuth2-Type")
 
             if google_client_type == 'client':
@@ -258,13 +265,18 @@ class EasyAuthClient:
             
             if redirect: 
                 return RedirectResponse(redirect_ref, headers=response.headers, status_code=HTTP_302_FOUND)
-            else:
-                decoded_token = auth_server.decode_token(token)[1]
-                return HTMLResponse(
-                    content=json.dumps({'exp': decoded_token['exp'], 'auth': True}), 
-                    status_code=200, 
-                    headers=response.headers
-                )
+    
+            # not redirecting 
+            
+            decoded_token = auth_server.decode_token(token)[1]
+            response_body = {'exp': decoded_token['exp'], 'auth': True}
+            if include_token:
+                response_body['token'] = token
+            return HTMLResponse(
+                content=json.dumps(response_body), 
+                status_code=200, 
+                headers=response.headers
+            )
 
         @server.get("/logout", tags=['Login'], response_class=HTMLResponse, include_in_schema=False)
         async def logout_page(
