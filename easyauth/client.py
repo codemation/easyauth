@@ -78,7 +78,8 @@ class EasyAuthClient:
         debug: bool = False,
         env_from_file: str = None,
         default_permissions: str = {'groups': ['administrators']},
-        default_login_redirect: str = '/'
+        default_login_redirect: str = '/',
+        secure: bool = False
     ):
         for arg in {auth_secret}:
             assert not auth_secret is None, f"Expected value for 'auth_secret'"
@@ -122,7 +123,8 @@ class EasyAuthClient:
             logger,
             debug,
             env_from_file,
-            default_permissions
+            default_permissions,
+            secure
         )
         await asyncio.sleep(5)
         
