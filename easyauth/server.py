@@ -64,7 +64,9 @@ class EasyAuthServer:
         manager_proxy_port: int = 8092,
         debug: bool = False,
         env_from_file: str = None,
-        default_permission: dict = {'groups': ['administrators']}
+        default_permission: dict = {'groups': ['administrators']},
+        secure: bool = False,
+        private_key: str = None
     ):
         self.server = server
         self.server.title = admin_title
@@ -73,6 +75,9 @@ class EasyAuthServer:
         self.DEFAULT_PERMISSION = default_permission
 
         self.rpc_server = rpc_server
+
+        # cookie security
+        self.cookie_security = {'secure': secure, 'samesite': "lax" if not secure else "none"}
 
         # logging setup # 
         self.log = logger
@@ -96,7 +101,10 @@ class EasyAuthServer:
         assert 'KEY_NAME' in os.environ, f"missing KEY_NAME env variable"
 
         # setup keys
-        self.key_setup()
+        if not private_key:
+            self.key_setup()
+        else:
+            self._privkey = jwk.JWK.from_json(private_key)
 
         # setup allowed origins - where can server receive token requests from
         self.cors_setup()
@@ -192,7 +200,9 @@ class EasyAuthServer:
         manager_proxy_port: int = 8092,
         debug: bool = False,
         env_from_file: str = None,
-        default_permission: dict = {'groups': ['administrators']}
+        default_permission: dict = {'groups': ['administrators']},
+        secure: bool = False,
+        private_key: str = None
     ):
 
         rpc_server = EasyRpcServer(
@@ -211,7 +221,9 @@ class EasyAuthServer:
             manager_proxy_port,
             debug,
             env_from_file,
-            default_permission
+            default_permission,
+            secure,
+            private_key
         )
 
         await database_setup(auth_server)

@@ -173,7 +173,7 @@ async def api_setup(server):
     ):
         token = await server.generate_google_oauth_token(request)
         # add token to cookie
-        response.set_cookie('token', token)
+        response.set_cookie('token', token, **server.cookie_security)
 
         redirect_ref = server.ADMIN_PREFIX
 
@@ -290,7 +290,8 @@ async def api_setup(server):
         token = await server.issue_token(permissions)
 
         # add token to cookie
-        response.set_cookie('token', token)
+        
+        response.set_cookie('token', token, **server.cookie_security)
 
         redirect_ref = server.ADMIN_PREFIX
 
@@ -304,14 +305,14 @@ async def api_setup(server):
     async def logout_page(
         response: Response
     ):
-        response.set_cookie('token', 'INVALID')
+        response.set_cookie('token', 'INVALID', **server.cookie_security)
         return RedirectResponse('/login', headers=response.headers)
 
     @server.server.post("/logout", tags=['Login'], response_class=HTMLResponse)
     async def logout_page_post(
         response: Response,
     ):
-        response.set_cookie('token', 'INVALID')
+        response.set_cookie('token', 'INVALID', **server.cookie_security)
         return RedirectResponse('/login/re', headers=response.headers)
 
     @server.server.post("/auth/user/activate")
