@@ -62,8 +62,7 @@ def manager_proxy_setup(server):
             for method in client_methods:
                 if not 'token_cleanup' in method:
                     continue
-                result = await client_methods[method]()
-                log.debug(f"global_token_cleanup: cleaned {len(result)} expired tokens")
+                await client_methods[method]()
                 break
         
         # start scheduler in background
