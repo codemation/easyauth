@@ -97,8 +97,8 @@ class EasyAuthAPIRouter:
                             ),
                             status_code=401
                         )
-                        response.set_cookie('token', 'INVALID')
-                        response.set_cookie('ref', request.__dict__['scope']['path'])
+                        response.set_cookie('token', 'INVALID', **self.parent.cookie_security)
+                        response.set_cookie('ref', request.__dict__['scope']['path'], **self.parent.cookie_security)
                         return response
                 try:
                     token = self.parent.decode_token(token)[1]
@@ -112,7 +112,7 @@ class EasyAuthAPIRouter:
                             ),
                             status_code=401
                         )
-                        response.set_cookie('token', 'INVALID')
+                        response.set_cookie('token', 'INVALID', **self.parent.cookie_security)
                         response.headers['ref'] = request.__dict__['scope']['path']
                         return response
                     raise HTTPException(status_code=401, detail=f"not authorized, invalid or expired")
@@ -138,7 +138,7 @@ class EasyAuthAPIRouter:
                             await self.parent.get_403_page(),
                             status_code=403
                         )
-                        #response.set_cookie('token', 'INVALID')
+
                         return response
                     raise HTTPException(
                         status_code=403, 

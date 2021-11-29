@@ -183,7 +183,7 @@ class EasyAuthClient:
                     message=message,
                     request=request
                 )
-            response.set_cookie('token', token['access_token'], **server.cookie_security)
+            response.set_cookie('token', token['access_token'], **auth_server.cookie_security)
             response.status_code=200
             
             redirect_ref = default_login_redirect
@@ -259,7 +259,7 @@ class EasyAuthClient:
                 auth_code
             )
 
-            response.set_cookie('token', token, **server.cookie_security)
+            response.set_cookie('token', token, **auth_server.cookie_security)
 
             redirect_ref = '/'
 
@@ -286,14 +286,14 @@ class EasyAuthClient:
         async def logout_page(
             response: Response
         ):
-            response.set_cookie('token', 'INVALID', **server.cookie_security)
+            response.set_cookie('token', 'INVALID', **auth_server.cookie_security)
             return RedirectResponse('/login', headers=response.headers)
 
         @server.post("/logout", tags=['Login'], response_class=HTMLResponse, include_in_schema=False)
         async def logout_page_post(
             response: Response,
         ):
-            response.set_cookie('token', 'INVALID', **server.cookie_security)
+            response.set_cookie('token', 'INVALID', **auth_server.cookie_security)
             return RedirectResponse('/login/re', headers=response.headers)
 
         @server.middleware('http')
@@ -492,7 +492,7 @@ class EasyAuthClient:
                             status_code=401
                         )
                         response.set_cookie('token', 'INVALID', **self.cookie_security)
-                        response.set_cookie('ref', request.__dict__['scope']['path'])
+                        response.set_cookie('ref', request.__dict__['scope']['path'], **self.cookie_security)
                         return response
                 try:
                     token = self.decode_token(token)[1]
@@ -533,7 +533,7 @@ class EasyAuthClient:
                             await self.get_403_page(), #self.admin.forbidden_page(),
                             status_code=403
                         )
-                        #response.set_cookie('token', 'INVALID')
+
                         return response
                     raise HTTPException(
                         status_code=403, 
