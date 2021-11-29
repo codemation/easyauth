@@ -175,8 +175,8 @@ class EasyAuthServer:
                         ),
                         status_code=401
                     )
-                    response.set_cookie('token', 'INVALID')
-                    response.set_cookie('ref', request.__dict__['scope']['path'])
+                    response.set_cookie('token', 'INVALID', **self.cookie_security)
+                    response.set_cookie('ref', request.__dict__['scope']['path'], **self.cookie_security)
                     
             if response.status_code == 500:
                 self.log.error(f"Internal error - 500 - with request: {request.__dict__}")
@@ -842,8 +842,8 @@ class EasyAuthServer:
                             ),
                             status_code=401
                         )
-                        response.set_cookie('token', 'INVALID')
-                        response.set_cookie('ref', request.__dict__['scope']['path'])
+                        response.set_cookie('token', 'INVALID', **self.cookie_security)
+                        response.set_cookie('ref', request.__dict__['scope']['path'], **self.cookie_security)
                         return response
 
 
@@ -859,8 +859,8 @@ class EasyAuthServer:
                             ),
                             status_code=401
                         )
-                        response.set_cookie('token', 'INVALID')
-                        response.set_cookie('ref', request.__dict__['scope']['path'])
+                        response.set_cookie('token', 'INVALID', **self.cookie_security)
+                        response.set_cookie('ref', request.__dict__['scope']['path'], **self.cookie_security)
                         return response
                     raise HTTPException(status_code=401, detail=f"not authorized, invalid or expired")
 
