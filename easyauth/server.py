@@ -558,12 +558,13 @@ class EasyAuthServer:
         all_tokens = await Tokens.all()
         revoked_tokens = [
             {
-                token.token_id: await self.revoke_token(token.token_id) 
+                token.token_id: asyncio.create_task(self.revoke_token(token.token_id))
             } for token in all_tokens 
             if datetime.datetime.now() > datetime.datetime.fromisoformat(token.expiration)
         ]
 
-        return revoked_tokens
+        self.log.warning(f"token_cleanup cleared {len(revoked_tokens)} expired tokens")
+        return f"finished cleaning {len(revoked_tokens)} expired tokens"
 
 
     async def issue_token(self, permissions, minutes=60, hours=0, days=0):

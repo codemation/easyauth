@@ -38,7 +38,6 @@ def manager_proxy_setup(server):
             #trigger all registered functions within 
             #clients namespace
             client_methods = manager['clients']
-            log.warning(f"triggering global_store_update for {client_methods}")
             for method in client_methods:
                 if method == 'get_store_data': 
                     continue
@@ -62,8 +61,7 @@ def manager_proxy_setup(server):
             for method in client_methods:
                 if not 'token_cleanup' in method:
                     continue
-                result = await client_methods[method]()
-                log.debug(f"global_token_cleanup: cleaned {len(result)} expired tokens")
+                await client_methods[method]()
                 break
         
         # start scheduler in background
