@@ -97,8 +97,6 @@ class EasyAuthServer:
         assert 'ISSUER' in os.environ, f"missing ISSUER env variable"
         assert 'SUBJECT' in os.environ, f"missing SUBJECT env variable"
         assert 'AUDIENCE' in os.environ, f"missing AUDIENCE env variable"
-        assert 'KEY_PATH' in os.environ, f"missing KEY_PATH env variable"
-        assert 'KEY_NAME' in os.environ, f"missing KEY_NAME env variable"
 
         # setup keys
         if not private_key:
@@ -366,6 +364,8 @@ class EasyAuthServer:
     
     def key_setup(self):
         # check if keys exist in KEY_PATH else create
+        assert 'KEY_PATH' in os.environ, f"missing KEY_PATH env variable"
+        assert 'KEY_NAME' in os.environ, f"missing KEY_NAME env variable"
 
         try:
             with open(f"{os.environ['KEY_PATH']}/{os.environ['KEY_NAME']}.key", 'r') as k:
