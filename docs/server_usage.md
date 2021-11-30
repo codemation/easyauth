@@ -20,7 +20,7 @@ EOF
     $ export VAR=VALUE
 
 
-### Create Server 
+### Create Server
 ```python
 #test_server.py
 from fastapi import FastAPI
@@ -32,7 +32,7 @@ server = FastAPI()
 @server.on_event('startup')
 async def startup():
     server.auth = await EasyAuthServer.create(
-        server, 
+        server,
         '/auth/token',
         auth_secret='abcd1234',
         admin_title='EasyAuth - Company',
@@ -40,7 +40,7 @@ async def startup():
         env_from_file='server_sqlite.json'
     )
 
-``` 
+```
 !!! SUCCESS "Start Server"
     $ uvicorn --host 0.0.0.0 --port 8330 test_server:server
 
@@ -55,7 +55,7 @@ async def startup():
 When an EasyAuthServer starts, it checks the provided KEY_NAME  & KEY_PATH location for existing keys, if none exist they are created.
 <br>
 
-```bash 
+```bash
 $ ls test_key*
 test_key.key  test_key.pub
 ```
@@ -64,17 +64,17 @@ test_key.key  test_key.pub
 !!! Warning "Important .key file must be kept safe!"
     Do not store in the paths monitored by git to avoid accidental commit.
 
-    The .pub file may be copied to separate apps which you want to may want to verify the validity of tokens on. 
+    The .pub file may be copied to separate apps which you want to may want to verify the validity of tokens on.
 
     EasyAuthClients will automatically pull the public key from the EasyAuthSever at startup.
 
-    If either key is, ever lost, they will be re-created on the EasyAuthServer in the KEY_PATH location upon restart. 
+    If either key is, ever lost, they will be re-created on the EasyAuthServer in the KEY_PATH location upon restart.
 
 ### APIRouter
-FastAPI provides an [APIRouter](https://fastapi.tiangolo.com/tutorial/bigger-applications/?h=apirouter#apirouter) object for defining path prefixes, pre-defined dependencies, see fastapi docs for more details. EasyAuthServer can extend the main FastAPI router using the <b>.create_api_router()</b> method. 
+FastAPI provides an [APIRouter](https://fastapi.tiangolo.com/tutorial/bigger-applications/?h=apirouter#apirouter) object for defining path prefixes, pre-defined dependencies, see fastapi docs for more details. EasyAuthServer can extend the main FastAPI router using the <b>.create_api_router()</b> method.
 
 !!! Important - "EasyAuthAPIRouter Considerations "
-    EasyAuthAPIRouter should be created after an `EasyAuthClient` or `EasyAuthServer` is created to ensure that the router are correctly included and visible in OpenAPI schema.  
+    EasyAuthAPIRouter should be created after an `EasyAuthClient` or `EasyAuthServer` is created to ensure that the router are correctly included and visible in OpenAPI schema.
 
 ```python
 from fastapi import FastAPI
@@ -85,7 +85,7 @@ server = FastAPI()
 @server.on_event('startup')
 async def startup():
     server.auth = await EasyAuthServer.create(
-        server, 
+        server,
         '/auth/token',
         auth_secret='abcd1234',
         admin_title='EasyAuth - Company',
@@ -154,7 +154,7 @@ The EasyAuth Admin GUI is accessible by accessing the listening host:port at the
 
 ![](images/admin_gui.png)
 
-### Docker 
+### Docker
 
 #### Start Auth Server
 
@@ -195,31 +195,31 @@ $ docker logs easyauth[2021-04-23 15:36:07 +0000] [6] [INFO] Starting gunicorn 2
 ![](images/email_gui.png)
 An EasyAuthServer may be configured to use an SMTP server. The EasyAuthServer and connected EasyAuthClients can utilize the email server for the following:
 
-- sending activation codes for new user registrations 
+- sending activation codes for new user registrations
 - sending password reset emails
 
 ![](images/register_gui.png)
 !!! TIP
-    Default endpoints for register exist at /register 
+    Default endpoints for register exist at /register
 
 ![](images/activate_gui.png)
 !!! TIP
-    Default endpoints for activate exist at /activate 
+    Default endpoints for activate exist at /activate
 
 ### Identity Providers
-Identity providers configuration is provided to allow third party authentications services to integrate within EasyAuth permissions. 
+Identity providers configuration is provided to allow third party authentications services to integrate within EasyAuth permissions.
 
 #### API
 ![](images/oauth_api.png)
 
-#### Default Permissions 
-<b>default_groups</b> provides a means to automatically assign new users to a group wether via /register or google login. 
+#### Default Permissions
+<b>default_groups</b> provides a means to automatically assign new users to a group wether via /register or google login.
 
 #### EasyAuth
 
 ![](images/easyauth_oauth_gui.png)
 
-#### Google 
+#### Google
 EasyAuth can be enabled to support registering / login from authenticated Google users
 
 !!! TIP "Pre-Requisites"
@@ -228,7 +228,7 @@ EasyAuth can be enabled to support registering / login from authenticated Google
 ![](images/google_oauth_gui.png)
 
 !!! WARNING
-    If no <b>default_groups</b> are configured for the Google Identity Provider, new users will default to EasyAuth provider's <b>default_groups</b>. 
+    If no <b>default_groups</b> are configured for the Google Identity Provider, new users will default to EasyAuth provider's <b>default_groups</b>.
 
 
 ##### Setup Google Client ID
@@ -239,10 +239,10 @@ EasyAuth can be enabled to support registering / login from authenticated Google
 
 
 !!! Note "Note on EasyAuthClients"
-    EasyAuthClient inherit the ability use a EasyAuthServers Google configuration, but still require associating the clients URIs http://client-name:port/ from the google console. 
+    EasyAuthClient inherit the ability use a EasyAuthServers Google configuration, but still require associating the clients URIs http://client-name:port/ from the google console.
 
-!!! TIP 
-    In testing Google authentication locally, redirect your local DNS in /etc/hosts 
+!!! TIP
+    In testing Google authentication locally, redirect your local DNS in /etc/hosts
 
 ```bash
 $ cat /etc/hosts
@@ -250,8 +250,8 @@ $ cat /etc/hosts
 ```
 
 !!! TIP "Troubleshooting"
-    Use browser developer tools to view browser console logs 
-    Ctrl + shift + i 
+    Use browser developer tools to view browser console logs
+    Ctrl + shift + i
 
 ![](images/oauth-error.png)
 

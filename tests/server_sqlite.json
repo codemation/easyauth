@@ -1,9 +1,9 @@
 {
-    "DB_TYPE": "sqlite",
-    "DB_NAME": "tests/auth.db",
-    "ISSUER": "EasyAuth",
-    "SUBJECT": "EasyAuth",
-    "AUDIENCE": "EasyAuthApis",
-    "KEY_PATH": "tests/",
-    "KEY_NAME": "test_key"
+  "AUDIENCE": "EasyAuthApis",
+  "DB_NAME": "tests/auth.db",
+  "DB_TYPE": "sqlite",
+  "ISSUER": "EasyAuth",
+  "KEY_NAME": "test_key",
+  "KEY_PATH": "tests/",
+  "SUBJECT": "EasyAuth"
 }

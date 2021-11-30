@@ -1,5 +1,5 @@
 ### Database Usage
-!!! TIP 
+!!! TIP
     The default 'batteries mostly included' implementation utilizes a sqlite database managed by aiopyql.
 
 !!! INFO "Supported Databases"
