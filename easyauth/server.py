@@ -58,7 +58,9 @@ class EasyAuthServer:
         manager_proxy_port: int = 8092,
         debug: bool = False,
         env_from_file: str = None,
-        default_permission: dict = {"groups": ["administrators"]},
+        default_permission: dict = {'groups': ['administrators']},
+        secure: bool = False,
+        private_key: str = None
     ):
         self.server = server
         self.server.title = admin_title
@@ -68,7 +70,10 @@ class EasyAuthServer:
 
         self.rpc_server = rpc_server
 
-        # logging setup #
+        # cookie security
+        self.cookie_security = {'secure': secure, 'samesite': "lax" if not secure else "none"}
+
+        # logging setup # 
         self.log = logger
         self.debug = debug
         level = None if not self.debug else "DEBUG"
@@ -82,15 +87,16 @@ class EasyAuthServer:
         if env_from_file:
             self.load_env_from_file(env_from_file)
 
-        # env variable checks #
-        assert "ISSUER" in os.environ, f"missing ISSUER env variable"
-        assert "SUBJECT" in os.environ, f"missing SUBJECT env variable"
-        assert "AUDIENCE" in os.environ, f"missing AUDIENCE env variable"
-        assert "KEY_PATH" in os.environ, f"missing KEY_PATH env variable"
-        assert "KEY_NAME" in os.environ, f"missing KEY_NAME env variable"
+        # env variable checks # 
+        assert 'ISSUER' in os.environ, f"missing ISSUER env variable"
+        assert 'SUBJECT' in os.environ, f"missing SUBJECT env variable"
+        assert 'AUDIENCE' in os.environ, f"missing AUDIENCE env variable"
 
         # setup keys
-        self.key_setup()
+        if not private_key:
+            self.key_setup()
+        else:
+            self._privkey = jwk.JWK.from_json(private_key)
 
         # setup allowed origins - where can server receive token requests from
         self.cors_setup()
@@ -147,20 +153,23 @@ class EasyAuthServer:
         async def handle_401_403(request, call_next):
             response = await call_next(request)
             request_dict = dict(request)
-            if (
-                response.status_code in [401, 404]
-                and "text/html" in request.headers["accept"]
-            ):
-                if response.status_code == 404:
-                    return HTMLResponse(self.admin.not_found_page(), status_code=404)
-                response = HTMLResponse(
-                    await self.get_login_page(
-                        message="Login Required", request=request
-                    ),
-                    status_code=401,
-                )
-                response.set_cookie("token", "INVALID")
-                response.set_cookie("ref", request.__dict__["scope"]["path"])
+
+            if response.status_code in [401, 404]:
+                if 'text/html' in request.headers['accept']:
+                    if response.status_code == 404:
+                        return HTMLResponse(
+                            self.admin.not_found_page(),
+                            status_code=404
+                        )
+                    response = HTMLResponse(
+                        await self.get_login_page(
+                            message='Login Required',
+                            request=request
+                        ),
+                        status_code=401
+                    )
+                    response.set_cookie('token', 'INVALID', **self.cookie_security)
+                    response.set_cookie('ref', request.__dict__['scope']['path'], **self.cookie_security)
 
             if response.status_code == 500:
                 self.log.error(
@@ -184,7 +193,10 @@ class EasyAuthServer:
         manager_proxy_port: int = 8092,
         debug: bool = False,
         env_from_file: str = None,
-        default_permission: dict = {"groups": ["administrators"]},
+        default_permission: dict = {'groups': ['administrators']},
+        secure: bool = False,
+        private_key: str = None
+
     ):
 
         rpc_server = EasyRpcServer(server, "/ws/easyauth", server_secret=auth_secret)
@@ -200,6 +212,8 @@ class EasyAuthServer:
             debug,
             env_from_file,
             default_permission,
+            secure,
+            private_key
         )
 
         await database_setup(auth_server)
@@ -232,10 +246,14 @@ class EasyAuthServer:
                     continue
                 await clients[client](action, store, key, value)
             return f"client_update completed"
+        
+        async def token_cleanup():
+            return await auth_server.token_cleanup()
 
-        client_update.__name__ = client_update.__name__ + "_".join(
-            str(uuid.uuid4()).split("-")
-        )
+        client_id = '_'.join(str(uuid.uuid4()).split('-'))
+
+        client_update.__name__ = client_update.__name__ + client_id
+        token_cleanup.__name__ = token_cleanup.__name__ + client_id
 
         # initialize global storage
         auth_server.store = {"tokens": {}}
@@ -254,9 +272,8 @@ class EasyAuthServer:
 
             return f"{action} in {store} with {key} completed"
 
-        store_data.__name__ = store_data.__name__ + "_".join(
-            str(uuid.uuid4()).split("-")
-        )
+
+        store_data.__name__ = store_data.__name__ + client_id
 
         rpc_server.origin(store_data, namespace="global_store")
 
@@ -266,7 +283,8 @@ class EasyAuthServer:
             return auth_server.store
 
         # register unique client_update in clients namespace
-        rpc_server.origin(client_update, namespace="clients")
+        rpc_server.origin(client_update, namespace='clients')
+        rpc_server.origin(token_cleanup, namespace='clients')
 
         # create connection to manager on 'manager' and 'clients' namespace
         await rpc_server.create_server_proxy(
@@ -339,6 +357,8 @@ class EasyAuthServer:
 
     def key_setup(self):
         # check if keys exist in KEY_PATH else create
+        assert 'KEY_PATH' in os.environ, f"missing KEY_PATH env variable"
+        assert 'KEY_NAME' in os.environ, f"missing KEY_NAME env variable"
 
         try:
             with open(
@@ -526,6 +546,22 @@ class EasyAuthServer:
         token = await Tokens.get(token_id=token_id)
         await token.delete()
         await self.global_store_update("delete", "tokens", key=token_id, value="")
+
+    async def token_cleanup(self):
+        """
+        check & delete expired tokens
+        """
+        all_tokens = await Tokens.all()
+        revoked_tokens = [
+            {
+                token.token_id: asyncio.create_task(self.revoke_token(token.token_id))
+            } for token in all_tokens 
+            if datetime.datetime.now() > datetime.datetime.fromisoformat(token.expiration)
+        ]
+
+        self.log.warning(f"token_cleanup cleared {len(revoked_tokens)} expired tokens")
+        return f"finished cleaning {len(revoked_tokens)} expired tokens"
+
 
     async def issue_token(self, permissions, minutes=60, hours=0, days=0):
 
@@ -775,21 +811,20 @@ class EasyAuthServer:
 
             @wraps(func, new_sig=new_sig)
             async def mock_function(*args, **kwargs):
-                request = kwargs["request"]
-                token = kwargs["token"]
-                if token == "NO_TOKEN" and (
-                    response_class is HTMLResponse
-                    or "text/html" in request.headers["accept"]
-                ):
-                    response = HTMLResponse(
-                        await self.get_login_page(
-                            message="Login Required", request=request
-                        ),
-                        status_code=401,
-                    )
-                    response.set_cookie("token", "INVALID")
-                    response.set_cookie("ref", request.__dict__["scope"]["path"])
-                    return response
+                request = kwargs['request']
+                token = kwargs['token']
+                if token ==  'NO_TOKEN':
+                    if response_class is HTMLResponse or 'text/html' in request.headers['accept']:
+                        response = HTMLResponse(
+                            await self.get_login_page(
+                                message='Login Required',
+                                request=request
+                            ),
+                            status_code=401
+                        )
+                        response.set_cookie('token', 'INVALID', **self.cookie_security)
+                        response.set_cookie('ref', request.__dict__['scope']['path'], **self.cookie_security)
+                        return response
 
                 try:
                     token = self.decode_token(token)[1]
@@ -802,8 +837,8 @@ class EasyAuthServer:
                             ),
                             status_code=401,
                         )
-                        response.set_cookie("token", "INVALID")
-                        response.set_cookie("ref", request.__dict__["scope"]["path"])
+                        response.set_cookie('token', 'INVALID', **self.cookie_security)
+                        response.set_cookie('ref', request.__dict__['scope']['path'], **self.cookie_security)
                         return response
                     raise HTTPException(
                         status_code=401, detail="not authorized, invalid or expired"

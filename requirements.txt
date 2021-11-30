@@ -1,4 +1,4 @@
-pydbantic==0.0.13
+pydbantic>=0.0.14
 bcrypt==3.2.0
 python-jwt==3.3.0
 makefun==1.9.5
@@ -12,3 +12,4 @@ gunicorn==20.1.0
 email-validator==1.1.3
 easyrpc==0.245
 google-api-python-client==2.26.1
+easyschedule==0.107

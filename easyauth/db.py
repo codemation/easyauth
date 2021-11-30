@@ -53,7 +53,7 @@ async def database_setup(server):
             "DB_PASSWORD",
         }:
             assert env in os.environ, f"missing required {env} env variable"
-            conf[env] = os.environ[env].lower()
+            conf[env] = os.environ[env]
 
         DB_URL = f"{conf['DB_TYPE']}://{conf['DB_USER']}:{conf['DB_PASSWORD']}@{conf['DB_HOST']}/{conf['DB_NAME']}"
     else:
