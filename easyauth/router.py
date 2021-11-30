@@ -83,18 +83,27 @@ class EasyAuthAPIRouter:
 
             @wraps(func, new_sig=new_sig)
             async def mock_function(*args, **kwargs):
-                request = kwargs['request']
-                token = kwargs['token']
-                if token ==  'NO_TOKEN' or token == 'INVALID':
-                    if response_class is HTMLResponse or 'text/html' in request.headers['accept']:
+                request = kwargs["request"]
+                token = kwargs["token"]
+                if token == "NO_TOKEN" or token == "INVALID":
+                    if (
+                        response_class is HTMLResponse
+                        or "text/html" in request.headers["accept"]
+                    ):
                         response = HTMLResponse(
                             await self.parent.get_login_page(
                                 message="Login Required", request=request
                             ),
                             status_code=401,
                         )
-                        response.set_cookie('token', 'INVALID', **self.parent.cookie_security)
-                        response.set_cookie('ref', request.__dict__['scope']['path'], **self.parent.cookie_security)
+                        response.set_cookie(
+                            "token", "INVALID", **self.parent.cookie_security
+                        )
+                        response.set_cookie(
+                            "ref",
+                            request.__dict__["scope"]["path"],
+                            **self.parent.cookie_security,
+                        )
                         return response
                 try:
                     token = self.parent.decode_token(token)[1]
@@ -107,8 +116,10 @@ class EasyAuthAPIRouter:
                             ),
                             status_code=401,
                         )
-                        response.set_cookie('token', 'INVALID', **self.parent.cookie_security)
-                        response.headers['ref'] = request.__dict__['scope']['path']
+                        response.set_cookie(
+                            "token", "INVALID", **self.parent.cookie_security
+                        )
+                        response.headers["ref"] = request.__dict__["scope"]["path"]
                         return response
                     raise HTTPException(
                         status_code=401, detail=f"not authorized, invalid or expired"

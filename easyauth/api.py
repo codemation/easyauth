@@ -1,5 +1,6 @@
 import json
-from typing import Optional, List
+from typing import List, Optional
+
 from pydantic import BaseModel
 from starlette.status import HTTP_302_FOUND
 
@@ -167,35 +168,35 @@ async def api_setup(server):
         await oauth.save()
         return f"{provider} OAuth Configured"
 
-    @server.server.post('/auth/token/oauth/google', include_in_schema=False)
+    @server.server.post("/auth/token/oauth/google", include_in_schema=False)
     async def create_google_oauth_token_api(
-        request: Request, 
+        request: Request,
         response: Response,
         redirect: bool = True,
-        include_token: bool = False 
+        include_token: bool = False,
     ):
         token = await server.generate_google_oauth_token(request)
         # add token to cookie
-        response.set_cookie('token', token, **server.cookie_security)
+        response.set_cookie("token", token, **server.cookie_security)
 
         redirect_ref = server.ADMIN_PREFIX
 
-        if 'ref' in request.cookies:
-            redirect_ref = request.cookies['ref']
-            response.delete_cookie('ref')
+        if "ref" in request.cookies:
+            redirect_ref = request.cookies["ref"]
+            response.delete_cookie("ref")
 
         if redirect:
-            return RedirectResponse(redirect_ref, headers=response.headers, status_code=HTTP_302_FOUND)
-        # not redirecting 
-        
+            return RedirectResponse(
+                redirect_ref, headers=response.headers, status_code=HTTP_302_FOUND
+            )
+        # not redirecting
+
         decoded_token = server.decode_token(token)[1]
-        response_body = {'exp': decoded_token['exp'], 'auth': True}
+        response_body = {"exp": decoded_token["exp"], "auth": True}
         if include_token:
-            response_body['token'] = token
+            response_body["token"] = token
         return HTMLResponse(
-            content=json.dumps(response_body), 
-            status_code=200, 
-            headers=response.headers
+            content=json.dumps(response_body), status_code=200, headers=response.headers
         )
 
     @server.server.post("/auth/token/refresh", response_model=Token, tags=["Token"])
@@ -293,7 +294,7 @@ async def api_setup(server):
         token = await server.issue_token(permissions)
 
         # add token to cookie
-        response.set_cookie('token', token, **server.cookie_security)
+        response.set_cookie("token", token, **server.cookie_security)
 
         redirect_ref = server.ADMIN_PREFIX
 
@@ -305,19 +306,17 @@ async def api_setup(server):
             redirect_ref, headers=response.headers, status_code=HTTP_302_FOUND
         )
 
-    @server.server.get("/logout", tags=['Login'], response_class=HTMLResponse)
-    async def logout_page(
-        response: Response
-    ):
-        response.set_cookie('token', 'INVALID', **server.cookie_security)
-        return RedirectResponse('/login', headers=response.headers)
+    @server.server.get("/logout", tags=["Login"], response_class=HTMLResponse)
+    async def logout_page(response: Response):
+        response.set_cookie("token", "INVALID", **server.cookie_security)
+        return RedirectResponse("/login", headers=response.headers)
 
     @server.server.post("/logout", tags=["Login"], response_class=HTMLResponse)
     async def logout_page_post(
         response: Response,
     ):
-        response.set_cookie('token', 'INVALID', **server.cookie_security)
-        return RedirectResponse('/login/re', headers=response.headers)
+        response.set_cookie("token", "INVALID", **server.cookie_security)
+        return RedirectResponse("/login/re", headers=response.headers)
 
     @server.server.post("/auth/user/activate")
     async def activate_user_api(activation_code: ActivationCode):

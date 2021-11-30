@@ -33,8 +33,8 @@ class EasyAuthClient:
         logger: logging.Logger = None,
         env_from_file: str = None,
         debug: bool = False,
-        default_permission: dict = {'groups': ['administrators']},
-        secure: bool = False
+        default_permission: dict = {"groups": ["administrators"]},
+        secure: bool = False,
     ):
         self.server = server
         self.oauth2_scheme = OAuth2PasswordBearer(tokenUrl=token_url)  # /token
@@ -45,9 +45,12 @@ class EasyAuthClient:
         self._public_key = jwk.JWK.from_json(public_key)
 
         # cookie security
-        self.cookie_security = {'secure': secure, 'samesite': "lax" if not secure else "none"}
+        self.cookie_security = {
+            "secure": secure,
+            "samesite": "lax" if not secure else "none",
+        }
 
-        #ensure new routers created follow same oath scheme
+        # ensure new routers created follow same oath scheme
         EasyAuthAPIRouter.parent = self
 
         self.rpc_server = rpc_server
@@ -75,9 +78,9 @@ class EasyAuthClient:
         logger: logging.Logger = None,
         debug: bool = False,
         env_from_file: str = None,
-        default_permissions: str = {'groups': ['administrators']},
-        default_login_redirect: str = '/',
-        secure: bool = False
+        default_permissions: str = {"groups": ["administrators"]},
+        default_login_redirect: str = "/",
+        secure: bool = False,
     ):
         for arg in {auth_secret}:
             assert not auth_secret is None, f"Expected value for 'auth_secret'"
@@ -118,7 +121,7 @@ class EasyAuthClient:
             debug,
             env_from_file,
             default_permissions,
-            secure
+            secure,
         )
         await asyncio.sleep(5)
 
@@ -188,9 +191,11 @@ class EasyAuthClient:
                 return await auth_server.get_login_page(
                     message=message, request=request
                 )
-            response.set_cookie('token', token['access_token'], **auth_server.cookie_security)
-            response.status_code=200
-            
+            response.set_cookie(
+                "token", token["access_token"], **auth_server.cookie_security
+            )
+            response.status_code = 200
+
             redirect_ref = default_login_redirect
             if "ref" in request.cookies:
                 redirect_ref = request.cookies["ref"]
@@ -245,14 +250,13 @@ class EasyAuthClient:
                 activation_code.dict()
             )
 
-        @server.post('/auth/token/oauth/google', include_in_schema=False)
+        @server.post("/auth/token/oauth/google", include_in_schema=False)
         async def create_google_oauth_token(
-            request: Request, 
-            response: Response, 
+            request: Request,
+            response: Response,
             redirect: bool = True,
             include_token: bool = False,
         ):
-
 
             google_client_type = request.headers.get("X-Google-OAuth2-Type")
 
@@ -263,35 +267,40 @@ class EasyAuthClient:
                 "generate_google_oauth_token"
             ](auth_code)
 
-            response.set_cookie('token', token, **auth_server.cookie_security)
+            response.set_cookie("token", token, **auth_server.cookie_security)
 
             redirect_ref = "/"
 
-            if 'ref' in request.cookies:
-                redirect_ref = request.cookies['ref']
-                response.delete_cookie('ref')
-            
-            if redirect: 
-                return RedirectResponse(redirect_ref, headers=response.headers, status_code=HTTP_302_FOUND)
-    
-            # not redirecting 
+            if "ref" in request.cookies:
+                redirect_ref = request.cookies["ref"]
+                response.delete_cookie("ref")
+
+            if redirect:
+                return RedirectResponse(
+                    redirect_ref, headers=response.headers, status_code=HTTP_302_FOUND
+                )
+
+            # not redirecting
 
             decoded_token = auth_server.decode_token(token)[1]
-            response_body = {'exp': decoded_token['exp'], 'auth': True}
+            response_body = {"exp": decoded_token["exp"], "auth": True}
             if include_token:
-                response_body['token'] = token
+                response_body["token"] = token
             return HTMLResponse(
-                content=json.dumps(response_body), 
-                status_code=200, 
-                headers=response.headers
+                content=json.dumps(response_body),
+                status_code=200,
+                headers=response.headers,
             )
 
-        @server.get("/logout", tags=['Login'], response_class=HTMLResponse, include_in_schema=False)
-        async def logout_page(
-            response: Response
-        ):
-            response.set_cookie('token', 'INVALID', **auth_server.cookie_security)
-            return RedirectResponse('/login', headers=response.headers)
+        @server.get(
+            "/logout",
+            tags=["Login"],
+            response_class=HTMLResponse,
+            include_in_schema=False,
+        )
+        async def logout_page(response: Response):
+            response.set_cookie("token", "INVALID", **auth_server.cookie_security)
+            return RedirectResponse("/login", headers=response.headers)
 
         @server.get(
             "/logout",
@@ -312,8 +321,8 @@ class EasyAuthClient:
         async def logout_page_post(
             response: Response,
         ):
-            response.set_cookie('token', 'INVALID', **auth_server.cookie_security)
-            return RedirectResponse('/login/re', headers=response.headers)
+            response.set_cookie("token", "INVALID", **auth_server.cookie_security)
+            return RedirectResponse("/login/re", headers=response.headers)
 
         @server.middleware("http")
         async def detect_token_in_cookie(request, call_next):
@@ -503,8 +512,12 @@ class EasyAuthClient:
                             ),
                             status_code=401,
                         )
-                        response.set_cookie('token', 'INVALID', **self.cookie_security)
-                        response.set_cookie('ref', request.__dict__['scope']['path'], **self.cookie_security)
+                        response.set_cookie("token", "INVALID", **self.cookie_security)
+                        response.set_cookie(
+                            "ref",
+                            request.__dict__["scope"]["path"],
+                            **self.cookie_security,
+                        )
                         return response
                 try:
                     token = self.decode_token(token)[1]
@@ -517,8 +530,8 @@ class EasyAuthClient:
                             ),
                             status_code=401,
                         )
-                        response.set_cookie('token', 'INVALID', **self.cookie_security)
-                        response.headers['ref'] = request.__dict__['scope']['path']
+                        response.set_cookie("token", "INVALID", **self.cookie_security)
+                        response.headers["ref"] = request.__dict__["scope"]["path"]
                         return response
                     raise HTTPException(
                         status_code=401, detail=f"not authorized, invalid or expired"
