@@ -1,6 +1,9 @@
 import json
 from typing import List, Optional
 
+from fastapi import Depends, Form, HTTPException, Request, Response
+from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
 from starlette.status import HTTP_302_FOUND
 
@@ -294,6 +297,7 @@ async def api_setup(server):
         token = await server.issue_token(permissions)
 
         # add token to cookie
+
         response.set_cookie("token", token, **server.cookie_security)
 
         redirect_ref = server.ADMIN_PREFIX
