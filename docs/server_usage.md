@@ -256,3 +256,60 @@ $ cat /etc/hosts
 ![](images/oauth-error.png)
 
 Updating Browser Path to overriden host path, login should then be possible if correctly configured in google console
+
+
+### Page Overloads
+It is possible to overload the existing login, register, activation, not_found, and forbidden pages using the page specific "overloader". Just like routers, this should be done after an EasyAuthClient is created.
+
+!!! Danger
+    Consider reviewing what API's are used / required before overloading any existing page. Oauth Login scripts are not loaded into overloaded pages.
+
+#### Not Found - 404
+```python
+from easyauth.pages import NotFoundPage
+
+@NotFoundPage.mark()
+def custom_not_found_page():
+    return "Custom 404 Page"
+
+```
+!!! TIP
+    `NotFoundPage` contents is wrapped in an HTMLResponse with a status_code `404`.
+
+#### Forbidden Page - 403
+```python
+from easyauth.pages import ForbiddenPage
+
+@ForbiddenPage.mark()
+def not_allowed_page():
+    return "Custom 404 Page"
+```
+#### Login Page & 401
+```python
+from easyauth.pages import LoginPage
+
+@LoginPage.mark()
+def custom_login_page():
+    return "Custom Login Page"
+
+```
+
+#### Register Page
+```python
+from easyauth.pages import RegisterPage
+
+@RegisterPage.mark()
+def custom_register_page():
+    return "Custom Register Page"
+
+```
+
+#### Activation Page
+```python
+from easyauth.pages import ActivationPage
+
+@ActivationPage.mark()
+def custom_activation_page():
+    return "Custom Login Page"
+
+```

@@ -17,7 +17,7 @@ async def startup():
         token_server='0.0.0.0',
         token_server_port=8090,
         auth_secret='abcd1234',
-        default_permissoins={'groups': ['users']}
+        default_permissions={'groups': ['users']}
     )
 
     # grants access to users matching default_permissions
@@ -71,7 +71,7 @@ async def startup():
         token_server='0.0.0.0',
         token_server_port=8090,
         auth_secret='abcd1234',
-        default_permissoins={'groups': ['users']}
+        default_permissions={'groups': ['users']}
     )
 
     # import sub modules
@@ -139,3 +139,74 @@ EasyAuth client endpoints, decorated by the auth router, that serve HTML respons
     Once logged in, the browser will contain a authenticatin cookie that matches the users token
 
 ![](images/cookie.png)
+
+
+### Page Overloads
+It is possible to overload the existing login, register, activation, not_found, and forbidden pages using the page specific "overloader". Just like routers, this should be done after an EasyAuthClient is created.
+
+!!! Danger
+    Consider reviewing what API's are used / required before overloading any existing page. Oauth Login scripts are not loaded into overloaded pages.
+
+#### Not Found - 404
+```python
+from easyauth.pages import NotFoundPage
+
+@NotFoundPage.mark()
+def custom_not_found_page():
+    return "Custom 404 Page"
+
+```
+!!! TIP
+    `NotFoundPage` contents is wrapped in an HTMLResponse with a status_code `404`.
+
+#### Forbidden Page - 403
+```python
+from easyauth.pages import ForbiddenPage
+
+@ForbiddenPage.mark()
+def not_allowed_page():
+    return "Custom 404 Page"
+```
+#### Login Page & 401
+```python
+from easyauth.pages import LoginPage
+
+@LoginPage.mark()
+def custom_login_page():
+    return "Custom Login Page"
+
+```
+
+#### Register Page
+```python
+from easyauth.pages import RegisterPage
+
+@RegisterPage.mark()
+def custom_register_page():
+    return "Custom Register Page"
+
+```
+
+#### Activation Page
+```python
+from easyauth.pages import ActivationPage
+
+@ActivationPage.mark()
+def custom_activation_page():
+    return "Custom Login Page"
+
+```
+
+### Path Overloads
+The default `/login` and 401 redirect path can be overloaded by setting the `default_login_path` on `EasyAuthClient.create()`.
+
+```python
+    server.auth = await EasyAuthClient.create(
+        server,
+        token_server='0.0.0.0',
+        token_server_port=8090,
+        auth_secret='abcd1234',
+        default_permissions={'groups': ['users']},
+        default_login_path='/v1/internal/login'
+    )
+```
