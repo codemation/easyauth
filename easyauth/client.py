@@ -20,6 +20,13 @@ from makefun import wraps
 from starlette.status import HTTP_302_FOUND
 
 from easyauth.models import ActivationCode
+from easyauth.pages import (
+    ActivationPage,
+    ForbiddenPage,
+    LoginPage,
+    NotFoundPage,
+    RegisterPage,
+)
 from easyauth.router import EasyAuthAPIRouter
 
 
@@ -33,12 +40,13 @@ class EasyAuthClient:
         logger: logging.Logger = None,
         env_from_file: str = None,
         debug: bool = False,
-        default_permission: dict = {"groups": ["administrators"]},
+        default_permissions: dict = {"groups": ["administrators"]},
         secure: bool = False,
+        default_login_path: str = "/login",
     ):
         self.server = server
         self.oauth2_scheme = OAuth2PasswordBearer(tokenUrl=token_url)  # /token
-        self.DEFAULT_PERMISSION = default_permission
+        self.default_permissions = default_permissions
 
         self.admin = Admin("EasyAuthClient", side_bar_sections=[])
         self.token_url = token_url
@@ -50,8 +58,19 @@ class EasyAuthClient:
             "samesite": "lax" if not secure else "none",
         }
 
+        # default login path
+        self.default_login_path = default_login_path
+
         # ensure new routers created follow same oath scheme
         EasyAuthAPIRouter.parent = self
+        for page in {
+            LoginPage,
+            RegisterPage,
+            ActivationPage,
+            NotFoundPage,
+            ForbiddenPage,
+        }:
+            page.parent = self
 
         self.rpc_server = rpc_server
 
@@ -81,6 +100,7 @@ class EasyAuthClient:
         default_permissions: str = {"groups": ["administrators"]},
         default_login_redirect: str = "/",
         secure: bool = False,
+        default_login_path="/login",
     ):
         for arg in {auth_secret}:
             assert not auth_secret is None, f"Expected value for 'auth_secret'"
@@ -122,6 +142,7 @@ class EasyAuthClient:
             env_from_file,
             default_permissions,
             secure,
+            default_login_path,
         )
         await asyncio.sleep(5)
 
@@ -151,13 +172,21 @@ class EasyAuthClient:
 
         rpc_server.origin(store_data, namespace="global_store")
 
-        @server.get("/login", response_class=HTMLResponse, include_in_schema=False)
+        @server.get(
+            f"{default_login_path}",
+            response_class=HTMLResponse,
+            include_in_schema=False,
+        )
         async def login(request: Request, response: Response):
             return await auth_server.get_login_page(
                 message="Login to Begin", request=request
             )
 
-        @server.post("/login/re", response_class=HTMLResponse, include_in_schema=False)
+        @server.post(
+            f"{default_login_path}/re",
+            response_class=HTMLResponse,
+            include_in_schema=False,
+        )
         async def login(request: Request, response: Response):
             response.delete_cookie("ref")
 
@@ -167,7 +196,7 @@ class EasyAuthClient:
             await auth_server.include_routers()
 
         @server.post(
-            "/login",
+            f"{default_login_path}",
             tags=["Login"],
             response_class=HTMLResponse,
             include_in_schema=False,
@@ -207,6 +236,10 @@ class EasyAuthClient:
 
         @server.get("/register", response_class=HTMLResponse, tags=["User"])
         async def admin_register():
+            return server.html_register_page()
+
+        @RegisterPage.mark()
+        def default_register_page():
             return register.get_register_user_page(
                 form=forms.get_form(
                     title="Register User",
@@ -233,6 +266,10 @@ class EasyAuthClient:
 
         @server.get("/activate", response_class=HTMLResponse, tags=["User"])
         async def admin_activate():
+            return server.html_activation_page()
+
+        @ActivationPage.mark()
+        def default_activate_page():
             return register.get_register_user_page(
                 form=forms.get_form(
                     title="Activate User",
@@ -300,7 +337,7 @@ class EasyAuthClient:
         )
         async def logout_page(response: Response):
             response.set_cookie("token", "INVALID", **auth_server.cookie_security)
-            return RedirectResponse("/login", headers=response.headers)
+            return RedirectResponse(f"{default_login_path}", headers=response.headers)
 
         @server.get(
             "/logout",
@@ -310,7 +347,7 @@ class EasyAuthClient:
         )
         async def logout_page(response: Response):
             response.set_cookie("token", "INVALID")
-            return RedirectResponse("/login", headers=response.headers)
+            return RedirectResponse(f"{default_login_path}", headers=response.headers)
 
         @server.post(
             "/logout",
@@ -322,7 +359,9 @@ class EasyAuthClient:
             response: Response,
         ):
             response.set_cookie("token", "INVALID", **auth_server.cookie_security)
-            return RedirectResponse("/login/re", headers=response.headers)
+            return RedirectResponse(
+                f"{default_login_path}/re", headers=response.headers
+            )
 
         @server.middleware("http")
         async def detect_token_in_cookie(request, call_next):
@@ -345,14 +384,14 @@ class EasyAuthClient:
             if token_in_cookie and not token_in_cookie == "INVALID":
                 if auth_ind:
                     request_dict["headers"].pop(auth_ind)
-                if not request_dict["path"] == "/login":
+                if not request_dict["path"] == f"{default_login_path}":
                     request_dict["headers"].append(
                         ("authorization".encode(), f"bearer {token_in_cookie}".encode())
                     )
                 else:
                     return RedirectResponse("/logout")
             else:
-                if not request_dict["path"] == "/login":
+                if not request_dict["path"] == f"{default_login_path}":
                     token_in_cookie = (
                         "NO_TOKEN" if not token_in_cookie else token_in_cookie
                     )
@@ -361,6 +400,11 @@ class EasyAuthClient:
                     )
             response = await call_next(request)
             if response.status_code == 404 and "text/html" in request.headers["accept"]:
+                if hasattr(auth_server, "html_not_found_page"):
+                    return HTMLResponse(
+                        auth_server.html_not_found_page(), status_code=404
+                    )
+
                 return HTMLResponse(auth_server.admin.not_found_page(), status_code=404)
             return response
 
@@ -376,11 +420,14 @@ class EasyAuthClient:
         return api_router
 
     async def get_403_page(self):
-        body = """
+        if hasattr(self, "html_forbidden_page"):
+            return self.html_forbidden_page()
+
+        body = f"""
             <div class="text-center">
                 <div class="error mx-auto" data-text="Forbidden">Forbidden</div>
                 <p class="text-gray-500 mb-0">You dont have permission to view this</p>
-                <a href="/login">&larr; Back to Login</a>
+                <a href="{self.default_login_path}">&larr; Back to Login</a>
             </div>
         """
         logout_modal = modal.get_modal(
@@ -412,9 +459,12 @@ class EasyAuthClient:
             "get_identity_providers"
         ]()
 
+        if hasattr(self, "html_login_page"):
+            return self.html_login_page()
+
         return self.admin.login_page(
             welcome_message=message,
-            login_action="/login",
+            login_action=f"{self.default_login_path}",
             **identity_providers,
             google_redirect_url=redirect_ref,
         )
@@ -501,7 +551,7 @@ class EasyAuthClient:
             async def mock_function(*args, **kwargs):
                 request = kwargs["request"]
                 token = kwargs["token"]
-                if token == "NO_TOKEN":
+                if token in {"NO_TOKEN", "INVALID"}:
                     if (
                         response_class is HTMLResponse
                         or "text/html" in request.headers["accept"]
@@ -610,7 +660,7 @@ class EasyAuthClient:
 
         if not permissions:
             permissions = (
-                self.DEFAULT_PERMISSION
+                self.default_permissions
                 if not default_permissions
                 else default_permissions
             )
@@ -627,7 +677,9 @@ class EasyAuthClient:
         *args,
         **kwargs,
     ):
-        permissions = self.parse_permissions(users, groups, roles, actions)
+        permissions = self.parse_permissions(
+            users, groups, roles, actions, self.default_permissions
+        )
         return self.router(
             path, "get", permissions=permissions, send_token=send_token, *args, **kwargs
         )
@@ -643,7 +695,9 @@ class EasyAuthClient:
         *args,
         **kwargs,
     ):
-        permissions = self.parse_permissions(users, groups, roles, actions)
+        permissions = self.parse_permissions(
+            users, groups, roles, actions, self.default_permissions
+        )
         return self.router(
             path,
             "post",
@@ -664,7 +718,9 @@ class EasyAuthClient:
         *args,
         **kwargs,
     ):
-        permissions = self.parse_permissions(users, groups, roles, actions)
+        permissions = self.parse_permissions(
+            users, groups, roles, actions, self.default_permissions
+        )
         return self.router(
             path,
             "udpate",
@@ -685,7 +741,9 @@ class EasyAuthClient:
         *args,
         **kwargs,
     ):
-        permissions = self.parse_permissions(users, groups, roles, actions)
+        permissions = self.parse_permissions(
+            users, groups, roles, actions, self.default_permissions
+        )
         return self.router(
             path,
             "delete",
@@ -706,7 +764,9 @@ class EasyAuthClient:
         *args,
         **kwargs,
     ):
-        permissions = self.parse_permissions(users, groups, roles, actions)
+        permissions = self.parse_permissions(
+            users, groups, roles, actions, self.default_permissions
+        )
         return self.router(
             path, "put", permissions=permissions, send_token=send_token, *args, **kwargs
         )
@@ -722,7 +782,9 @@ class EasyAuthClient:
         *args,
         **kwargs,
     ):
-        permissions = self.parse_permissions(users, groups, roles, actions)
+        permissions = self.parse_permissions(
+            users, groups, roles, actions, self.default_permissions
+        )
         return self.router(
             path,
             "patch",
@@ -743,7 +805,9 @@ class EasyAuthClient:
         *args,
         **kwargs,
     ):
-        permissions = self.parse_permissions(users, groups, roles, actions)
+        permissions = self.parse_permissions(
+            users, groups, roles, actions, self.default_permissions
+        )
         return self.router(
             path,
             "options",
@@ -764,7 +828,9 @@ class EasyAuthClient:
         *args,
         **kwargs,
     ):
-        permissions = self.parse_permissions(users, groups, roles, actions)
+        permissions = self.parse_permissions(
+            users, groups, roles, actions, self.default_permissions
+        )
         return self.router(
             path,
             "head",

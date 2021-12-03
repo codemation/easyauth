@@ -16,6 +16,7 @@ from easyauth.models import (
     Tokens,
     Users,
 )
+from easyauth.pages import ActivationPage, RegisterPage
 
 
 async def frontend_setup(server):
@@ -1253,6 +1254,10 @@ async def frontend_setup(server):
 
     @server.server.get("/register", response_class=HTMLResponse, tags=["User"])
     async def admin_register():
+        return server.html_register_page()
+
+    @RegisterPage.mark()
+    def default_register_page():
         return register.get_register_user_page(
             form=forms.get_form(
                 title="Register User",
@@ -1275,6 +1280,10 @@ async def frontend_setup(server):
 
     @server.server.get("/activate", response_class=HTMLResponse, tags=["User"])
     async def admin_activate():
+        return server.html_activation_page()
+
+    @ActivationPage.mark()
+    def default_activation_page():
         return register.get_register_user_page(
             title="Activate user",
             welcome_message="Activate your account",
