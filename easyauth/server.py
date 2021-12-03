@@ -43,6 +43,13 @@ from easyauth.models import (
     Tokens,
     Users,
 )
+from easyauth.pages import (
+    ActivationPage,
+    ForbiddenPage,
+    LoginPage,
+    NotFoundPage,
+    RegisterPage,
+)
 from easyauth.router import EasyAuthAPIRouter
 
 
@@ -86,6 +93,14 @@ class EasyAuthServer:
         self.api_routers = []
 
         EasyAuthAPIRouter.parent = self
+        for page in {
+            LoginPage,
+            RegisterPage,
+            ActivationPage,
+            NotFoundPage,
+            ForbiddenPage,
+        }:
+            page.parent = self
 
         if env_from_file:
             self.load_env_from_file(env_from_file)
@@ -116,6 +131,10 @@ class EasyAuthServer:
                 shutdown_proxies = f"for pid in $(ps aux | grep {manager_proxy_port}' | awk '{{print $2}}'); do kill $pid; done"
                 os.system(shutdown_proxies)
             self.log.warning("EasyAuthServer - Finished shutdown process!")
+
+        @NotFoundPage.mark()
+        def default_not_found_page():
+            return HTMLResponse(self.admin.not_found_page(), status_code=404)
 
         @server.middleware("http")
         async def detect_token_in_cookie(request, call_next):
@@ -160,9 +179,8 @@ class EasyAuthServer:
             if response.status_code in [401, 404]:
                 if "text/html" in request.headers["accept"]:
                     if response.status_code == 404:
-                        return HTMLResponse(
-                            self.admin.not_found_page(), status_code=404
-                        )
+                        return self.html_not_found_page()
+
                     response = HTMLResponse(
                         await self.get_login_page(
                             message="Login Required", request=request
@@ -413,14 +431,18 @@ class EasyAuthServer:
             size="sm",
         )
 
-        return admin.get_admin_page(
-            name="",
-            sidebar=self.admin.sidebar,
-            body="",
-            topbar_extra=body,
-            current_user="",
-            modals=logout_modal,
-            google=await self.get_google_oauth_client_id(),
+        return (
+            admin.get_admin_page(
+                name="",
+                sidebar=self.admin.sidebar,
+                body="",
+                topbar_extra=body,
+                current_user="",
+                modals=logout_modal,
+                google=await self.get_google_oauth_client_id(),
+            )
+            if not hasattr(self, "html_forbidden_page")
+            else self.html_forbidden_page()
         )
 
     async def get_login_page(self, message, request: Request = None, **kwargs):
@@ -430,11 +452,15 @@ class EasyAuthServer:
 
         identity_providers = await self.get_identity_providers()
 
-        return self.admin.login_page(
-            welcome_message=message,
-            login_action="/login",
-            **identity_providers,
-            google_redirect_url=redirect_ref,
+        return (
+            self.admin.login_page(
+                welcome_message=message,
+                login_action="/login",
+                **identity_providers,
+                google_redirect_url=redirect_ref,
+            )
+            if not hasattr(self, "html_login_page")
+            else self.html_login_page()
         )
 
     async def email_setup(
