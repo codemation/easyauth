@@ -26,17 +26,18 @@ jobs:
           pip install -r requirements-dev.txt
       - name: Lint
         run: pre-commit run --all-files
-
-  # Label of the container job
-  test-easyauth:
+  test-easyauth-postgres:
     # Containers must run in Linux based operating systems
     runs-on: ubuntu-latest
-    # Docker Hub image that `container-job` executes in
-    #container: joshjamison/python38:latest
     strategy:
       matrix:
         python-version: [3.7,3.8,3.9,3.10.0]
     steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+      - name: build and run auth server image
+        run: |
+          docker build  -f docker/test-docker/Dockerfile-postgres -t joshjamison/easyauth:local .
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v2
         with:
@@ -49,19 +50,75 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
-      - name: Setup Test Configuration
+      - name: Test EasyAuth Server
         run: |
-          cat > server_sqlite.json << EOF
-          {
-              "DB_TYPE": "sqlite",
-              "DB_NAME": "tests/auth",
-              "ISSUER": "EasyAuth",
-              "SUBJECT": "EasyAuthAuth",
-              "AUDIENCE": "EasyAuthApis",
-              "KEY_PATH": "$(pwd)",
-              "KEY_NAME": "test_key"
-          }
-          EOF
+          export ENV=postgres
+          pytest tests/test_server_api.py -s
+      - name: Test EasyAuth Client
+        run: |
+          export ENV=postgres
+          pytest tests/test_client_api.py -s
+  test-easyauth-client-mysql:
+    # Containers must run in Linux based operating systems
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.7,3.8,3.9,3.10.0]
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+      - name: build and run auth server image
+        run: |
+          docker build  -f docker/test-docker/Dockerfile-mysql -t joshjamison/easyauth:local .
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+      # Downloads a copy of the code in your repository before running CI tests
+      - name: Check out repository code
+        uses: actions/checkout@v2
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
       - name: Test EasyAuth
         run: |
-          pytest tests/test_server_api.py
+          export ENV=mysql
+          pytest tests/test_server_api.py -s
+      - name: Test EasyAuth Client
+        run: |
+          export ENV=mysql
+          pytest tests/test_client_api.py -s
+  test-easyauth-client-sqlite:
+    # Containers must run in Linux based operating systems
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.7,3.8,3.9,3.10.0]
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+      - name: build and run auth server image
+        run: |
+          docker build  -f docker/test-docker/Dockerfile-sqlite -t joshjamison/easyauth:local .
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+      # Downloads a copy of the code in your repository before running CI tests
+      - name: Check out repository code
+        uses: actions/checkout@v2
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+      - name: Test EasyAuth
+        run: |
+          export ENV=sqlite
+          pytest tests/test_server_api.py -s
+      - name: Test EasyAuth Client
+        run: |
+          export ENV=sqlite
+          pytest tests/test_client_api.py -s
