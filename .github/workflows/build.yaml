@@ -95,6 +95,9 @@ jobs:
           export  KEY_PATH=$(pwd)
           export  KEY_NAME=test_key
           export ENV=mysql
+          docker-compose -f docker/test-docker/auth-mysql.yml up -d db
+          echo "Sleeping to allow db to start"
+          sleep 30
           pytest tests/test_server_api.py -s
       - name: Test EasyAuth Client
         run: |
