@@ -52,6 +52,10 @@ from easyauth.pages import (
 )
 from easyauth.router import EasyAuthAPIRouter
 
+# Import Ldap3 library
+from ldap3 import Server, Connection, SAFE_SYNC, SUBTREE
+from ldap3.core.exceptions import *
+
 
 class EasyAuthServer:
     def __init__(
