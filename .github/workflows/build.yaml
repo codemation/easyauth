@@ -48,8 +48,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
+          pip install asyncpg==0.24.0 psycopg2==2.9.2
       - name: Test EasyAuth - Server
         run: |
+          export TEST_INIT_PASSWORD=easyauth
           export  ISSUER=EasyAuth
           export  SUBJECT=EasyAuthAuth
           export  AUDIENCE=EasyAuthApis
@@ -83,8 +85,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
+          pip install aiomysql==0.0.21 cryptography==3.4.8 mysqlclient==2.0.3
       - name: Test EasyAuth - Server
         run: |
+          export TEST_INIT_PASSWORD=easyauth
           export  ISSUER=EasyAuth
           export  SUBJECT=EasyAuthAuth
           export  AUDIENCE=EasyAuthApis
@@ -120,6 +124,7 @@ jobs:
           pip install -r requirements-dev.txt
       - name: Test EasyAuth - Server
         run: |
+          export TEST_INIT_PASSWORD=easyauth
           export  ISSUER=EasyAuth
           export  SUBJECT=EasyAuthAuth
           export  AUDIENCE=EasyAuthApis
