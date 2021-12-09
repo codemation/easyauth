@@ -114,6 +114,20 @@ class EasyAuthServer:
         assert "SUBJECT" in os.environ, f"missing SUBJECT env variable"
         assert "AUDIENCE" in os.environ, f"missing AUDIENCE env variable"
 
+        # Necessary variables for LDAP connection
+        # Set default value
+        self.AUTH_TYPE = os.environ.get('AUTH_TYPE', "EasyAuth")
+        if self.AUTH_TYPE == 'LDAP':
+            assert 'LDAP_SERVER' in os.environ, f"missing LDAP_SERVER env variable"
+            assert 'LDAP_PORT' in os.environ, f"missing LDAP_PORT env variable"
+            assert 'LDAP_DOMAIN' in os.environ, f"missing LDAP_DOMAIN env variable"
+            assert 'LDAP_BASE_DN' in os.environ, f"missing LDAP_BASE_DN env variable"
+            self.LDAP_SERVER = os.environ['LDAP_SERVER']
+            self.LDAP_PORT = os.environ['LDAP_PORT']
+            self.LDAP_DOMAIN = os.environ['LDAP_DOMAIN']
+            self.LDAP_BASE_DN = os.environ['LDAP_BASE_DN']
+            self.LDAP_SSL = os.environ['LDAP_SSL']
+
         # setup keys
         if not private_key:
             self.key_setup()
