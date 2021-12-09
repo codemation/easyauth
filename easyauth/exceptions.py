@@ -33,3 +33,8 @@ class GoogleOauthHeaderMalformed(HTTPException):
         super().__init__(
             status_code=503, detail="Expected 'X-Google-OAuth2-Type' in header"
         )
+
+
+class EasyAuthClientToServerConnectionError(Exception):
+    def __init__(self, server, port):
+        super().__init__(self, f"Connection to EasyAuthServer {server}:{port} failed")
