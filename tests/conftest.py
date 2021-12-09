@@ -1,18 +1,113 @@
 import os
+import subprocess
+import time
 
 import pytest
+import requests
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from easyauth.client import EasyAuthClient
+from easyauth.pages import NotFoundPage
 from easyauth.router import EasyAuthAPIRouter
 from easyauth.server import EasyAuthServer
 
 # import sub modules
 
 
+def get_db_config():
+    if not os.environ.get("ENV"):
+        assert f"missing ENV environment variable [sqlite|mysql|postgres]"
+
+    if os.environ["ENV"] == "mysql":
+        return {
+            "DB_TYPE": "mysql",
+            "DB_NAME": "auth-db",
+            "DB_HOST": "127.0.0.1",
+            "DB_USER": "josh",
+            "DB_PASSWORD": "abcd1234",
+            "DB_PORT": "3306",
+        }
+    if os.environ["ENV"] == "postgres":
+        return {
+            "DB_TYPE": "postgres",
+            "DB_NAME": "auth-db",
+            "DB_HOST": "127.0.0.1",
+            "DB_USER": "postgres",
+            "DB_PASSWORD": "postgres",
+            "DB_PORT": "6379",
+        }
+    if os.environ["ENV"] == "sqlite":
+        return {
+            "DB_TYPE": "sqlite",
+            "DB_NAME": "auth-db",
+        }
+    os.environ["TEST_INIT_PASSWORD"] = "easyauth"
+
+
+@pytest.fixture()
+def db_config():
+    for key, value in get_db_config().items():
+        os.environ[key] = value
+    p = (
+        subprocess.Popen(
+            f"docker-compose -f docker/test-docker/auth-{os.environ['ENV']}.yml up -d db".split(
+                " "
+            )
+        )
+        if not os.environ["ENV"] == "sqlite"
+        else None
+    )
+    time.sleep(20)
+    yield
+
+    p = (
+        subprocess.Popen(
+            f"docker-compose -f docker/test-docker/auth-{os.environ['ENV']}.yml down".split(
+                " "
+            )
+        )
+        if not os.environ["ENV"] == "sqlite"
+        else None
+    )
+
+
+@pytest.fixture()
+def db_and_auth_server():
+    for key, value in get_db_config().items():
+        os.environ[key] = value
+    p = (
+        subprocess.Popen(
+            f"docker-compose -f docker/test-docker/auth-{os.environ['ENV']}.yml up -d db".split(
+                " "
+            )
+        )
+        if not os.environ["ENV"] == "sqlite"
+        else None
+    )
+    time.sleep(20)
+    p = subprocess.Popen(
+        f"docker-compose -f docker/test-docker/auth-{os.environ['ENV']}.yml up -d auth".split(
+            " "
+        )
+    )
+    time.sleep(10)
+    yield
+
+    p = (
+        subprocess.Popen(
+            f"docker-compose -f docker/test-docker/auth-{os.environ['ENV']}.yml down".split(
+                " "
+            )
+        )
+        if not os.environ["ENV"] == "sqlite"
+        else None
+    )
+
+
 @pytest.mark.asyncio
 @pytest.fixture()
-async def auth_test_client():
+async def auth_test_server(db_config):
     server = FastAPI()
 
     os.environ["EASYAUTH_PATH"] = os.environ["PWD"]
@@ -25,7 +120,6 @@ async def auth_test_client():
             auth_secret="abcd1234",
             admin_title="EasyAuth - Company",
             admin_prefix="/admin",
-            env_from_file="tests/server_sqlite.json",
         )
 
         from .finance import finance
@@ -63,3 +157,28 @@ async def auth_test_client():
 
     with TestClient(server) as test_client:
         yield test_client
+
+
+class AuthClient:
+    def __init__(self, host: str = "0.0.0.0", port: str = "8521"):
+        self.host = host
+        self.port = port
+
+    def get(self, path, *args, **kwargs):
+        url = f"http://{self.host}:{self.port}{path}"
+        return requests.get(url, *args, **kwargs)
+
+    def post(self, path, *args, **kwargs):
+        url = f"http://{self.host}:{self.port}{path}"
+        return requests.post(url, *args, **kwargs)
+
+
+@pytest.fixture()
+def auth_test_client(db_and_auth_server):
+    client_process = subprocess.Popen(
+        f"uvicorn --host 0.0.0.0 --port 8521 tests.test_client:server".split(" ")
+    )
+    auth_client = AuthClient()
+    time.sleep(12)
+    yield auth_client
+    client_process.kill()
