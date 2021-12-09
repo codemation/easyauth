@@ -33,6 +33,7 @@ jobs:
       matrix:
         python-version: [3.7,3.8,3.9,3.10.0]
     steps:
+      - uses: actions/checkout@v2
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
       - name: build and run auth server image
@@ -43,9 +44,6 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       # Downloads a copy of the code in your repository before running CI tests
-      - name: Check out repository code
-        uses: actions/checkout@v2
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -65,6 +63,7 @@ jobs:
       matrix:
         python-version: [3.7,3.8,3.9,3.10.0]
     steps:
+      - uses: actions/checkout@v2
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
       - name: build and run auth server image
@@ -75,9 +74,6 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       # Downloads a copy of the code in your repository before running CI tests
-      - name: Check out repository code
-        uses: actions/checkout@v2
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -97,6 +93,7 @@ jobs:
       matrix:
         python-version: [3.7,3.8,3.9,3.10.0]
     steps:
+      - uses: actions/checkout@v2
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
       - name: build and run auth server image
@@ -107,9 +104,6 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       # Downloads a copy of the code in your repository before running CI tests
-      - name: Check out repository code
-        uses: actions/checkout@v2
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
