@@ -2,23 +2,30 @@ import asyncio
 import json
 import logging
 import os
+import sys
 import uuid
 from inspect import Parameter, signature
-from typing import Any
+from typing import Any, List
 
 import jwcrypto.jwk as jwk
 import python_jwt as jwt
+from aiohttp.client_exceptions import ClientConnectorError
 from easyadmin import Admin
 from easyadmin.elements import buttons, forms, html_input, modal, scripts
 from easyadmin.pages import register
+from easyrpc.exceptions import ServerConnectionError, ServerUnreachable
 from easyrpc.server import EasyRpcServer
+from easyschedule import EasyScheduler
 from fastapi import Depends, FastAPI, Form, HTTPException, Request, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.security import OAuth2PasswordBearer
+from jwcrypto.jws import InvalidJWSSignature
 from makefun import wraps
+from pydbantic import Database, DataBaseModel, Default, PrimaryKey
 from starlette.status import HTTP_302_FOUND
 
+from easyauth.exceptions import EasyAuthClientToServerConnectionError
 from easyauth.models import ActivationCode
 from easyauth.pages import (
     ActivationPage,
@@ -28,6 +35,32 @@ from easyauth.pages import (
     RegisterPage,
 )
 from easyauth.router import EasyAuthAPIRouter
+
+
+class LogFilter:
+    def __init__(self, logger, filters: List[Exception]):
+        self.log = logger
+        self.filters = filters
+
+    def info(self, *args):
+        self.log.info(*args)
+
+    def warning(self, *args):
+        self.log.warning(*args)
+
+    def error(self, *args):
+        self.log.error(*args)
+
+    def debug(self, *args):
+        self.log.debug(*args)
+
+    def exception(self, *args) -> bool:
+        if sys.exc_info()[0] in self.filters:
+            self.log.error(*args)
+            return True
+        else:
+            self.log.exception(*args)
+            return False
 
 
 class EasyAuthClient:
@@ -102,33 +135,52 @@ class EasyAuthClient:
         secure: bool = False,
         default_login_path="/login",
     ):
+        setup_error = None
         for arg in {auth_secret}:
             assert not auth_secret is None, f"Expected value for 'auth_secret'"
-
-        # TODO - Depricate token_url usage in later releases
-        # TODO - Depricate env_from_file usage - accepts now, but has no effect
 
         # disect token URL, extract host:port
         if token_url:
             token_server, token_server_port = token_url.split("/")[2].split(":")
 
-        rpc_server = EasyRpcServer(server, "/ws/easyauth", server_secret=auth_secret)
-
-        await rpc_server.create_server_proxy(
-            token_server,
-            token_server_port,
-            "/ws/easyauth",
-            server_secret=auth_secret,
-            namespace="global_store",
+        log = LogFilter(
+            logging.getLogger("EasyAuthClient"),
+            filters=[
+                ServerUnreachable,
+                ServerConnectionError,
+                ConnectionRefusedError,
+                ClientConnectorError,
+            ],
         )
 
-        await rpc_server.create_server_proxy(
-            token_server,
-            token_server_port,
-            "/ws/easyauth",
-            server_secret=auth_secret,
-            namespace="easyauth",
+        rpc_server = EasyRpcServer(
+            server, "/ws/easyauth", server_secret=auth_secret, logger=log
         )
+
+        try:
+            await rpc_server.create_server_proxy(
+                token_server,
+                token_server_port,
+                "/ws/easyauth",
+                server_secret=auth_secret,
+                namespace="global_store",
+            )
+
+            await rpc_server.create_server_proxy(
+                token_server,
+                token_server_port,
+                "/ws/easyauth",
+                server_secret=auth_secret,
+                namespace="easyauth",
+            )
+
+        except Exception:
+            setup_error = log.exception(
+                f"error creating connction to EasyAuthServer {token_server}:{token_server_port}"
+            )
+
+        if setup_error is not None:
+            assert False, f"EasyAuthClient - exiting"
 
         setup_info = await rpc_server["easyauth"]["get_setup_info"]()
 
@@ -144,6 +196,19 @@ class EasyAuthClient:
             secure,
             default_login_path,
         )
+        auth_server.scheduler = EasyScheduler()
+
+        @auth_server.scheduler("* * * * *")
+        async def refresh_auth_public_key():
+            try:
+                setup_info = await rpc_server["easyauth"]["get_setup_info"]()
+                auth_server._public_key = jwk.JWK.from_json(setup_info["public_rsa"])
+            except IndexError as e:
+                auth_server.log.error(
+                    f"Unable to refresh_auth_public_key - connection with EasyAuthServer {token_server}:{token_server_port} may have failed"
+                )
+
+        asyncio.create_task(auth_server.scheduler.start())
         await asyncio.sleep(5)
 
         auth_server.store = await rpc_server["global_store"]["get_store_data"]()
@@ -156,9 +221,11 @@ class EasyAuthClient:
             auth_server.log.debug(
                 f"store_data action: {action} - store: {store} - key: {key} - value: {value}"
             )
+
             if not store in auth_server.store:
                 auth_server.store[store] = {}
             if action in {"update", "put"}:
+                print(f"token updated: {key}")
                 auth_server.store[store][key] = value
             else:
                 if key in auth_server.store[store]:
@@ -217,12 +284,15 @@ class EasyAuthClient:
                     if "invalid username / password" in token
                     else token
                 )
-                return await auth_server.get_login_page(
-                    message=message, request=request
+                return HTMLResponse(
+                    await auth_server.get_login_page(message=message, request=request),
+                    status_code=401,
                 )
-            response.set_cookie(
-                "token", token["access_token"], **auth_server.cookie_security
-            )
+            token = token["access_token"]
+            token_id = auth_server.decode_token(token)[1]["token_id"]
+            auth_server.store["tokens"][token_id] = ""
+
+            response.set_cookie("token", token, **auth_server.cookie_security)
             response.status_code = 200
 
             redirect_ref = default_login_redirect
@@ -571,9 +641,17 @@ class EasyAuthClient:
                         return response
                 try:
                     token = self.decode_token(token)[1]
-                except Exception:
-                    self.log.exception(f"error decoding token")
-                    if response_class is HTMLResponse:
+                except Exception as e:
+                    if isinstance(e, InvalidJWSSignature):
+                        self.log.error(
+                            f"EasyAuthClient failed to decode token - keys may have rotated - login wil be required"
+                        )
+                    else:
+                        self.log.exception(f"error decoding token")
+                    if (
+                        response_class is HTMLResponse
+                        or "text/html" in request.headers["accept"]
+                    ):
                         response = HTMLResponse(
                             await self.get_login_page(
                                 message="Login Required", request=request
@@ -581,7 +659,12 @@ class EasyAuthClient:
                             status_code=401,
                         )
                         response.set_cookie("token", "INVALID", **self.cookie_security)
-                        response.headers["ref"] = request.__dict__["scope"]["path"]
+                        response.set_cookie(
+                            "ref",
+                            request.__dict__["scope"]["path"],
+                            **self.cookie_security,
+                        )
+                        # response.headers["ref"] = request.__dict__["scope"]["path"]
                         return response
                     raise HTTPException(
                         status_code=401, detail=f"not authorized, invalid or expired"
@@ -601,7 +684,27 @@ class EasyAuthClient:
                     self.log.error(
                         f"token for user {token['permissions']['users'][0]} - {token['token_id']} is unknown / revoked {self.store['tokens']}"
                     )
-                    allowed = False
+                    if (
+                        response_class is HTMLResponse
+                        or "text/html" in request.headers["accept"]
+                    ):
+                        response = HTMLResponse(
+                            await self.get_login_page(
+                                message="Login Required", request=request
+                            ),
+                            status_code=401,
+                        )
+                        response.set_cookie("token", "INVALID", **self.cookie_security)
+                        response.set_cookie(
+                            "ref",
+                            request.__dict__["scope"]["path"],
+                            **self.cookie_security,
+                        )
+                        # response.headers["ref"] = request.__dict__["scope"]["path"]
+                        return response
+                    raise HTTPException(
+                        status_code=401, detail=f"not authorized, invalid or expired"
+                    )
 
                 if not allowed:
                     if (

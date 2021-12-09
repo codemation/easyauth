@@ -109,7 +109,10 @@ class EasyAuthAPIRouter:
                     token = self.parent.decode_token(token)[1]
                 except Exception:
                     self.parent.log.exception(f"error decoding token")
-                    if response_class is HTMLResponse:
+                    if (
+                        response_class is HTMLResponse
+                        or "text/html" in request.headers["accept"]
+                    ):
                         response = HTMLResponse(
                             await self.parent.get_login_page(
                                 message="Login Required", request=request

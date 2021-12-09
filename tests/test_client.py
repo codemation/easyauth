@@ -3,6 +3,7 @@ from typing import Optional
 from fastapi import FastAPI
 
 from easyauth.client import EasyAuthClient
+from easyauth.pages import NotFoundPage
 
 server = FastAPI(openapi_url="/groups/openapi.json")
 
@@ -11,9 +12,9 @@ server = FastAPI(openapi_url="/groups/openapi.json")
 async def startup():
     server.auth = await EasyAuthClient.create(
         server,
-        "http://0.0.0.0:8320/auth/token",  # Should be a running EasyAuthServer
+        "http://0.0.0.0:8520/auth/token",  # Should be a running EasyAuthServer
         auth_secret="abcd1234",
-        env_from_file="client_env.json",
+        default_login_path="/login",
     )
 
     # grants access to only specified users
@@ -38,3 +39,7 @@ async def startup():
     )
     async def action(access_token: Optional[str] = None):
         return f"I am actions with token {access_token}"
+
+    @NotFoundPage.mark()
+    def unimplemented_not_found():
+        return f"TODO - not found"

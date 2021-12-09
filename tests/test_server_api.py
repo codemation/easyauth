@@ -2,8 +2,8 @@ import pytest
 
 
 @pytest.mark.asyncio
-async def test_authentication(auth_test_client):
-    test_client = auth_test_client
+async def test_server_authentication(auth_test_server):
+    test_client = auth_test_server
     prefix = test_client.app.auth.ADMIN_PREFIX
     server = test_client.app
 
@@ -21,7 +21,7 @@ async def test_authentication(auth_test_client):
 
     # verify token generation with correct credentials
 
-    good_credentials = {"username": "admin", "password": "abcd1234"}
+    good_credentials = {"username": "admin", "password": "easyauth"}
 
     response = test_client.post("/auth/token/login", json=good_credentials)
     assert response.status_code == 200, f"{response.text} - {response.status_code}"

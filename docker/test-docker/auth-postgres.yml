@@ -1,0 +1,36 @@
+version: "3.7"
+services:
+  db:
+    image: postgres:13
+    command: postgres -c 'max_connections=10000' # 1000 CONNECTIONS LETS GOOOO
+    environment:
+      - POSTGRES_DB=auth-db
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - auth-pg-db:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+  auth:
+    image: joshjamison/easyauth:postgres
+    ports:
+    - "8520:8520"
+    environment:
+    - DB_TYPE=postgres
+    - DB_NAME=auth-db
+    - DB_HOST=db
+    - DB_USER=postgres
+    - DB_PASSWORD=postgres
+    - DB_PORT=6379
+    - ISSUER=EasyAuth
+    - SUBJECT=EasyAuthAuth
+    - AUDIENCE=EasyAuthApis
+    - KEY_PATH=/mnt/easyauth
+    - KEY_NAME=test_key
+    - AUTH_WORKERS=1
+    - AUTH_SECRET=abcd1234
+    - TEST_INIT_PASSWORD=easyauth
+    volumes:
+    - ~/.auth/:/mnt/easyauth
+volumes:
+  auth-pg-db: {}

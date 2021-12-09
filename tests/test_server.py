@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 
+from easyauth.pages import LoginPage
 from easyauth.server import EasyAuthServer
 
 server = FastAPI()
@@ -17,3 +18,7 @@ async def startup():
     from tests.finance import finance
     from tests.hr.hr import hr_router
     from tests.marketing import marketing
+
+    @LoginPage.mark()
+    def login_page():
+        return "Login Page Not Implemented"

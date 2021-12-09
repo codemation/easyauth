@@ -1,0 +1,34 @@
+version: "3.7"
+services:
+  db:
+    image: mysql
+    environment:
+    - MYSQL_USER=josh
+    - MYSQL_PASSWORD=abcd1234
+    - MYSQL_ROOT_PASSWORD=abcd1234
+    - MYSQL_DATABASE=auth-db
+    ports:
+      - "3306:3306"
+  auth:
+    image: joshjamison/easyauth:mysql
+    ports:
+    - "8520:8520"
+    environment:
+    - DB_TYPE=mysql
+    - DB_NAME=auth-db
+    - DB_HOST=db
+    - DB_USER=josh
+    - DB_PASSWORD=abcd1234
+    - DB_PORT=3306
+    - ISSUER=EasyAuth
+    - SUBJECT=EasyAuthAuth
+    - AUDIENCE=EasyAuthApis
+    - KEY_PATH=/mnt/easyauth
+    - KEY_NAME=test_key
+    - AUTH_WORKERS=1
+    - AUTH_SECRET=abcd1234
+    - TEST_INIT_PASSWORD=easyauth
+    volumes:
+    - ~/.auth/:/mnt/easyauth
+volumes:
+  auth-mysql-db: {}

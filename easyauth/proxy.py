@@ -43,7 +43,9 @@ def manager_proxy_setup(server):
                     continue
 
                 try:
-                    result = await client_methods[method](action, store, key, value)
+                    asyncio.create_task(
+                        client_methods[method](action, store, key, value)
+                    )
                 except Exception as e:
                     log.exception(
                         f"error with {method} on k: {key} - v: {value} in {store}"

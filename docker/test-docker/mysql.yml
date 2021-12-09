@@ -1,0 +1,13 @@
+version: "3.7"
+services:
+  db:
+    image: mysql
+    environment:
+    - MYSQL_USER=mysql_user
+    - MYSQL_PASSWORD=abcd1234
+    - MYSQL_ROOT_PASSWORD=abcd1234
+    - MYSQL_DATABASE=auth-db
+    volumes:
+      - auth-pg-db:/var/lib/postgresql/data
+    ports:
+      - "3306:3306"

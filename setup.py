@@ -2,6 +2,7 @@ import setuptools
 
 BASE_REQUIREMENTS = [
     "makefun==1.9.5",
+    "easyschedule==0.107",
     "PyJWT==2.0.0",
     "python-jwt==3.3.0",
     "fastapi>=0.65.2",
@@ -15,7 +16,6 @@ SERVER_REQUIREMENTS = [
     "cryptography==35.0.0",
     "bcrypt==3.2.0",
     "uvloop",
-    "easyschedule==0.107",
     "example==0.1.0",
     "httptools==0.3.0",
     "gunicorn==20.1.0",

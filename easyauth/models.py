@@ -1,3 +1,4 @@
+import os
 from enum import Enum
 from typing import List, Optional, Union
 
@@ -148,7 +149,11 @@ async def tables_setup(server):
     new_user = len(await Users.all()) <= 0
 
     if new_user and server.leader:
-        random_password = server.generate_random_string(8)
+        random_password = (
+            server.generate_random_string(8)
+            if not os.environ.get("TEST_INIT_PASSWORD")
+            else os.environ["TEST_INIT_PASSWORD"]
+        )
         create_user = Actions(
             action="CREATE_USER", details="default action for creating users"
         )
