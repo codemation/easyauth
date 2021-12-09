@@ -241,6 +241,7 @@ class EasyAuthServer:
         await frontend_setup(auth_server)
 
         if auth_server.leader:
+
             # create subprocess for manager proxy
             auth_server.log.warning(f"starting manager_proxy")
             auth_server.manager_proxy = subprocess.Popen(
@@ -287,8 +288,9 @@ class EasyAuthServer:
                 auth_server.store[store] = {}
             if action in {"update", "put"}:
                 auth_server.store[store][key] = value
-            elif key in auth_server.store[store]:
-                del auth_server.store[store][key]
+            else:
+                if key in auth_server.store[store]:
+                    del auth_server.store[store][key]
 
             return f"{action} in {store} with {key} completed"
 
@@ -386,7 +388,9 @@ class EasyAuthServer:
                 self._privkey = jwk.JWK.from_json(k.readline())
         except Exception:
             # create private / public keys
-            self._privkey = jwk.JWK.generate(kty="RSA", size=2048)
+            self._privkey = jwk.JWK.generate(
+                kid=self.generate_random_string(56), kty="RSA", size=2048
+            )
             with open(
                 f"{os.environ['KEY_PATH']}/{os.environ['KEY_NAME']}.key", "w"
             ) as k:
@@ -571,7 +575,8 @@ class EasyAuthServer:
 
     async def revoke_token(self, token_id: str):
         token = await Tokens.get(token_id=token_id)
-        await token.delete()
+        if token:
+            await token.delete()
         await self.global_store_update("delete", "tokens", key=token_id, value="")
 
     async def token_cleanup(self):
@@ -620,7 +625,12 @@ class EasyAuthServer:
             datetime.timedelta(minutes=minutes, hours=hours, days=days),
         )
 
-        await self.global_store_update("update", "tokens", key=token_id, value="")
+        # this should be done once issue token context exits
+        # since this can be triggered by a client, which could not
+        # correctly update its token id store while waiting on the issue_token response
+        asyncio.create_task(
+            self.global_store_update("update", "tokens", key=token_id, value="")
+        )
 
         return token
 
@@ -862,7 +872,34 @@ class EasyAuthServer:
                     token = self.decode_token(token)[1]
                 except Exception:
                     self.log.error("error decoding token")
-                    if response_class is HTMLResponse:
+                    if (
+                        response_class is HTMLResponse
+                        or "text/html" in request.headers["accept"]
+                    ):
+                        response = HTMLResponse(
+                            await self.get_login_page(
+                                message="Login Required", request=request
+                            ),
+                            status_code=401,
+                        )
+                        response.set_cookie("token", "INVALID", **self.cookie_security)
+                        response.set_cookie(
+                            "ref",
+                            request.__dict__["scope"]["path"],
+                            **self.cookie_security,
+                        )
+                        return response
+                    raise HTTPException(
+                        status_code=401, detail="not authorized, invalid or expired"
+                    )
+                if token["token_id"] not in self.store["tokens"]:
+                    self.log.error(
+                        f"token for user {token['permissions']['user'][0]} used is unknown / revoked"
+                    )
+                    if (
+                        response_class is HTMLResponse
+                        or "text/html" in request.headers["accept"]
+                    ):
                         response = HTMLResponse(
                             await self.get_login_page(
                                 message="Login Required", request=request
@@ -890,11 +927,6 @@ class EasyAuthServer:
                         if value in token["permissions"][auth_type]:
                             allowed = True
                             break
-                if token["token_id"] not in self.store["tokens"]:
-                    self.log.error(
-                        f"token for user {token['permissions']['user'][0]} used is unknown / revoked"
-                    )
-                    allowed = False
 
                 if not allowed:
                     if response_class is HTMLResponse:
