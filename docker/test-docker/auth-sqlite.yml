@@ -1,0 +1,21 @@
+version: "3.7"
+services:
+  auth:
+    image: joshjamison/easyauth:sqlite
+    ports:
+    - "8520:8520"
+    environment:
+    - DB_TYPE=sqlite
+    - DB_NAME=auth-db
+    - ISSUER=EasyAuth
+    - SUBJECT=EasyAuthAuth
+    - AUDIENCE=EasyAuthApis
+    - KEY_PATH=/mnt/easyauth
+    - KEY_NAME=test_key
+    - AUTH_WORKERS=1
+    - AUTH_SECRET=abcd1234
+    - TEST_INIT_PASSWORD=easyauth
+    volumes:
+    - ~/.auth/:/mnt/easyauth
+volumes:
+  auth-pg-db: {}
