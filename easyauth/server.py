@@ -759,26 +759,69 @@ class EasyAuthServer:
         return await self.issue_token(permissions)
 
     async def validate_user_pw(self, username, password) -> Union[Users, None]:
-        user = await Users.get(username=username)
-
-        if user:
-            if user.account_type == "service":
-                raise HTTPException(
-                    status_code=401, detail="unable to login with service accounts"
-                )
-
+        #  Check authentication type
+        if (self.AUTH_TYPE == "LDAP") and (username != "admin"): 
+            
             try:
-                try:
-                    if not self.is_password_valid(user.password, password):
-                        return None
+                # Config connection to LDAP server and try to bind.
+                server = Server(self.LDAP_SERVER, port = int(self.LDAP_PORT), use_ssl = bool(self.LDAP_SSL))
+                conn = Connection(server, username+"@"+self.LDAP_DOMAIN, password, client_strategy=SAFE_SYNC, auto_bind=True)
+                status, result, response, _ = conn.search(
+                    search_base = self.LDAP_BASE_DN,
+                    search_filter = '(&(objectClass=person)(samaccountname='+username+'))',
+                    search_scope = SUBTREE,
+                    attributes = ['samaccountname', 'givenName', 'mail', 'sn']
+                    )
+                
+                # check LDAP user in Database
+                user = await Users.get(username=username)
+
+                # User does not exist in database -> create user -> and re-search
+                if user is None:
+                    self.log.warn(f"User does not exist in database -> create user {username}")
+    
+                    result = await self.register_user(
+                        {
+                            'username': username,
+                            'email address': response[0]['attributes']['mail'],
+                            'full name': f"{response[0]['attributes']['givenName']} {response[0]['attributes']['sn']}",
+                            'password': '',
+                            'repeat password': '',
+                            "groups": ['administrators']
+                        }
+                    )
+                    user = await Users.get(username=username)
+
+                # User exists in database, continue with login
+                if user:
+                    self.log.info(f"User {username} exists in database, continue with login")
                     return user
-                except ValueError as e:
-                    self.log.exception("error validating user_pw")
-                return user
-            except Exception as e:
-                self.log.error(
-                    f"Auth failed for user {user.username} - invalid credentials"
-                )
+
+            # If LDAP bind fails something is wrong with credentials
+            except LDAPBindError as e:
+                self.log.error(f"User "+username+" tried to login and failed.")
+
+        else:
+            user = await Users.get(username=username)
+
+            if user:
+                if user.account_type == "service":
+                    raise HTTPException(
+                        status_code=401, detail="unable to login with service accounts"
+                    )
+
+                try:
+                    try:
+                        if not self.is_password_valid(user.password, password):
+                            return None
+                        return user
+                    except ValueError as e:
+                        self.log.exception("error validating user_pw")
+                    return user
+                except Exception as e:
+                    self.log.error(
+                        f"Auth failed for user {user.username} - invalid credentials"
+                    )
         return None
 
     async def get_user_permissions(self, username: str) -> dict:
