@@ -19,6 +19,17 @@ EOF
 !!! NOTE "Manually set env variables"
     $ export VAR=VALUE
 
+In case you want to __enable__ the __LDAP__ authentication you need to set the below additional variables inside your .json file
+```bash
+"AUTH_TYPE": "LDAP",
+"LDAP_SERVER": "Replace with LDAP server IP or FQDN",
+"LDAP_DOMAIN": "Replace with your Domain name eg. dc.example.com",
+"LDAP_PORT": "Replace with your LDAP port, usually 389 or 636(SSL)",
+"LDAP_SSL": "True or False",
+"LDAP_BASE_DN": "This is the base DN, under which all your users are located"
+```
+>LDAP connection has been tested only on MS Active Directory with and without SSL.
+
 
 ### Create Server
 ```python
