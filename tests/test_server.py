@@ -19,6 +19,6 @@ async def startup():
     from tests.hr.hr import hr_router
     from tests.marketing import marketing
 
-    @LoginPage.mark()
-    def login_page():
-        return "Login Page Not Implemented"
+    # @LoginPage.mark()
+    # def login_page():
+    #     return "Login Page Not Implemented"
