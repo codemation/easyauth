@@ -464,11 +464,11 @@ async def api_setup(server):
                 status_code=400, detail=f"{service.username} already exists"
             )
 
-        user_groups = [await verify_group(group) for group in user.groups]
+        service_groups = [await verify_group(group) for group in service.groups]
 
         service = service.dict()
         service["account_type"] = "service"
-        service["groups"] = user_groups
+        service["groups"] = service_groups
 
         await Services.create(**service)
         # trigger some activation email later?
