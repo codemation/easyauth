@@ -41,7 +41,7 @@ async def api_setup(server):
 
     async def verify_user(user):
 
-        user = await Users.get(username=user)
+        user = await Users.get(username=user) or await Services.get(username=user)
         if not user:
             # raise group does not exist
             raise HTTPException(
