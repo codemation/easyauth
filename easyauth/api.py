@@ -130,19 +130,19 @@ async def api_setup(server):
         "/auth/serviceaccount/token/{service}", response_model=Token, tags=["Token"]
     )
     async def get_service_account_token(service: str):
-        service_user = await Users.get(username=service)
+        service_user = await Services.get(username=service)
 
         if service_user is None:
             raise HTTPException(
-                status_code=404, detail=f"no service user with name {service} exists"
+                status_code=404, detail=f"no service user with name {service_user} exists.Users type is {service_user}"
             )
-
-        if service_user["account_type"] != "service":
+        
+        if service_user.account_type.value != "service":
             raise HTTPException(
-                status_code=400, detail=f"user {service} is not a service type account"
+                status_code=400, detail=f"user {service_user.username} is not a service type account."
             )
 
-        permissions = await server.get_user_permissions(service)
+        permissions = await server.get_service_permissions(service)
 
         token = await server.issue_token(permissions, days=999)
 
@@ -457,6 +457,7 @@ async def api_setup(server):
     @api_router.put(
         "/auth/service", status_code=201, actions=["CREATE_USER"], tags=["Users"]
     )
+    # Test 1: async def create_service(service: UsersInput):
     async def create_service(service: UsersInput):
 
         if await Services.get(username=service.username) is not None:
@@ -464,7 +465,7 @@ async def api_setup(server):
                 status_code=400, detail=f"{service.username} already exists"
             )
 
-        user_groups = [await verify_group(group) for group in user.groups]
+        user_groups = [await verify_group(group) for group in service.groups]
 
         service = service.dict()
         service["account_type"] = "service"

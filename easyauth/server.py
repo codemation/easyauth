@@ -42,6 +42,7 @@ from easyauth.models import (
     Roles,
     Tokens,
     Users,
+    Services
 )
 from easyauth.pages import (
     ActivationPage,
@@ -790,6 +791,38 @@ class EasyAuthServer:
                 permissions["groups"].append(group.group_name)
         permissions["users"] = [user.username]
         return permissions
+
+    
+    # Add get service permission
+
+    async def get_service_permissions(self, username: str) -> dict:
+        """
+        accepts validated user returned by validate_user_pw
+        returns allowed permissions based on member group's roles / permissonis
+        """
+        user = await Services.get(username=username)
+
+        permissions = {}
+
+        for group in user.groups:
+            for role in group.roles:
+                for action in role.actions:
+                    if "actions" not in permissions:
+                        permissions["actions"] = []
+
+                    if action not in permissions["actions"]:
+                        permissions["actions"].append(action.action)
+                if "roles" not in permissions:
+                    permissions["roles"] = []
+                if role not in permissions["roles"]:
+                    permissions["roles"].append(role.role)
+            if "groups" not in permissions:
+                permissions["groups"] = []
+            if group not in permissions["groups"]:
+                permissions["groups"].append(group.group_name)
+        permissions["users"] = [user.username]
+        return permissions
+
 
     def router(
         self, path, method, permissions: list, send_token: bool = False, *args, **kwargs
