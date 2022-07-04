@@ -800,11 +800,11 @@ class EasyAuthServer:
         accepts validated user returned by validate_user_pw
         returns allowed permissions based on member group's roles / permissonis
         """
-        user = await Services.get(username=username)
+        service = await Services.get(username=username)
 
         permissions = {}
 
-        for group in user.groups:
+        for group in service.groups:
             for role in group.roles:
                 for action in role.actions:
                     if "actions" not in permissions:
@@ -820,7 +820,7 @@ class EasyAuthServer:
                 permissions["groups"] = []
             if group not in permissions["groups"]:
                 permissions["groups"].append(group.group_name)
-        permissions["users"] = [user.username]
+        permissions["users"] = [service.username]
         return permissions
 
 
