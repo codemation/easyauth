@@ -792,9 +792,7 @@ class EasyAuthServer:
         permissions["users"] = [user.username]
         return permissions
 
-    
     # Add get service permission
-
     async def get_service_permissions(self, username: str) -> dict:
         """
         accepts validated user returned by validate_user_pw
