@@ -134,7 +134,7 @@ async def api_setup(server):
 
         if service_user is None:
             raise HTTPException(
-                status_code=404, detail=f"no service user with name {service_user} exists.Users type is {service_user}"
+                status_code=404, detail=f"no service user with name {service_user.username} exists."
             )
         
         if service_user.account_type.value != "service":
