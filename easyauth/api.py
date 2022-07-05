@@ -425,7 +425,7 @@ async def api_setup(server):
 
     server.register_user = register_user
 
-    @api_router.put("/auth/user", status_code=201, tags=["Users"])
+    @api_router.post("/auth/user", status_code=201, tags=["Users"])
     async def create_user(user: UsersInput, response_type: str = None):
         response = await __create_user(user)
         if response_type != "html":
@@ -454,7 +454,7 @@ async def api_setup(server):
 
     server.create_user = __create_user
 
-    @api_router.put(
+    @api_router.post(
         "/auth/service", status_code=201, actions=["CREATE_USER"], tags=["Users"]
     )
     # Test 1: async def create_service(service: UsersInput):
@@ -485,7 +485,7 @@ async def api_setup(server):
         email: Optional[str]
         groups: Optional[List[str]]
 
-    @api_router.post("/auth/user/{username}", tags=["Users"])
+    @api_router.put("/auth/user/{username}", tags=["Users"])
     async def update_user(username: str, update: dict):
 
         user_to_update = await verify_user(username)
@@ -542,7 +542,7 @@ async def api_setup(server):
 
     # Groups
 
-    @api_router.put("/auth/group", status_code=201, tags=["Groups"])
+    @api_router.post("/auth/group", status_code=201, tags=["Groups"])
     async def create_group(group: GroupsInput):
         if await Groups.get(group_name=group.group_name) is not None:
             raise HTTPException(
@@ -557,7 +557,7 @@ async def api_setup(server):
     class UpdateRoles(BaseModel):
         roles: list
 
-    @api_router.post("/auth/group/{group}", status_code=200, tags=["Groups"])
+    @api_router.put("/auth/group/{group}", status_code=200, tags=["Groups"])
     async def update_group(group: str, roles: UpdateRoles):
         roles = dict(roles)
         group_to_update = await verify_group(group)
@@ -585,7 +585,7 @@ async def api_setup(server):
 
     # Roles
 
-    @api_router.put("/auth/role", status_code=201, tags=["Roles"])
+    @api_router.post("/auth/role", status_code=201, tags=["Roles"])
     async def create_role(role: RolesInput):
 
         if await Roles.get(role=role.role) is not None:
@@ -600,7 +600,7 @@ async def api_setup(server):
     class UpdateActions(BaseModel):
         actions: list
 
-    @api_router.post("/auth/role/{role}", status_code=200, tags=["Roles"])
+    @api_router.put("/auth/role/{role}", status_code=200, tags=["Roles"])
     async def update_role(role: str, actions: UpdateActions):
         actions = dict(actions)
         role_to_update = await verify_role(role)
@@ -630,7 +630,7 @@ async def api_setup(server):
 
     ## Permissions
 
-    @api_router.put("/auth/actions", status_code=201, tags=["Actions"])
+    @api_router.post("/auth/actions", status_code=201, tags=["Actions"])
     async def create_permission(action: Actions):
         if await Actions.get(action=action.action) is not None:
             raise HTTPException(
@@ -643,7 +643,7 @@ async def api_setup(server):
     class UpdateDetails(BaseModel):
         details: str
 
-    @api_router.post("/auth/actions", status_code=200, tags=["Actions"])
+    @api_router.put("/auth/actions", status_code=200, tags=["Actions"])
     async def update_permission(action: str, details: UpdateDetails):
         action = await verify_action(action)
         action.details = details.details
