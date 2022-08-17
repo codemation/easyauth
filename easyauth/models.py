@@ -42,7 +42,7 @@ class Actions(DataBaseModel):
 
 class Roles(DataBaseModel):
     role: str
-    actions: List[Actions]
+    actions: List[Actions] = []
 
 
 class RolesInput(Roles):
@@ -51,7 +51,7 @@ class RolesInput(Roles):
 
 class Groups(DataBaseModel):
     group_name: str
-    roles: List[Roles]
+    roles: List[Roles] = []
 
 
 class GroupsInput(Groups):
@@ -61,7 +61,7 @@ class GroupsInput(Groups):
 class BaseUser(DataBaseModel):
     username: str = None
     account_type: AccountType
-    groups: List[Groups]
+    groups: List[Groups] = []
 
 
 class Users(BaseUser):

@@ -30,7 +30,7 @@ def get_db_config():
         }
     if os.environ["ENV"] == "postgres":
         return {
-            "DB_TYPE": "postgres",
+            "DB_TYPE": "postgresql",
             "DB_NAME": "auth-db",
             "DB_HOST": "127.0.0.1",
             "DB_USER": "postgres",

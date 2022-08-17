@@ -16,7 +16,7 @@ services:
     ports:
     - "8520:8520"
     environment:
-    - DB_TYPE=postgres
+    - DB_TYPE=postgresql
     - DB_NAME=auth-db
     - DB_HOST=db
     - DB_USER=postgres
