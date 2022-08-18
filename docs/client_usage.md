@@ -6,6 +6,7 @@
 #test_client.py
 from fastapi import FastAPI
 
+from easyauth import get_user
 from easyauth.client import EasyAuthClient
 
 server = FastAPI()
@@ -32,8 +33,8 @@ async def startup():
 
     # grants access to members of 'users' or 'admins' group.
     @server.auth.get('/groups', groups=['users', 'admins'])
-    async def groups():
-        return f"I am groups"
+    async def groups(user: get_user()):
+        return f"{user} is in groups"
 
     # grants access to all members of 'users' group
     # or a groups with role of 'basic' or advanced
