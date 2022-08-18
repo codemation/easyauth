@@ -85,6 +85,7 @@ uvicorn --host 0.0.0.0 --port 8330 test_server:server
 from fastapi import FastAPI
 
 from easyauth.client import EasyAuthClient
+from easyauth import get_user
 
 server = FastAPI()
 
@@ -110,8 +111,8 @@ async def startup():
 
     # grants access to members of 'users' or 'admins' group.
     @server.auth.get('/groups', groups=['users', 'admins'])
-    async def groups():
-        return f"I am groups"
+    async def groups(user: str = get_user()):
+        return f"{user} is in groups"
 
     # grants access to all members of 'users' group
     # or a groups with role of 'basic' or advanced

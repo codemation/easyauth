@@ -188,19 +188,31 @@ async def test_server_authentication(auth_test_server):
         response.status_code == 200
     ), f"update group {response.text} - {response.status_code}"
 
-    # verify permissoin denied without required action
+    # verify permission denied without required action
     response = test_client.get("/testing/actions", headers=headers)
     assert response.status_code == 403, f"{response.text} - {response.status_code}"
 
-    # verify permissoin denied without required role
+    # verify permission denied without required role
     response = test_client.get("/testing/roles", headers=headers)
     assert response.status_code == 403, f"{response.text} - {response.status_code}"
 
-    # verify permissoin denied without required group
+    # verify permission denied without required group
     response = test_client.get("/testing/groups", headers=headers)
     assert response.status_code == 403, f"{response.text} - {response.status_code}"
 
-    # verify permissoin allowed for specific user
+    # test get_user {'Authorization': 'Bearer tokenstr'}
+    response = test_client.get("/testing/current_user", headers=headers)
+    assert response.status_code == 200, f"{response.text} - {response.status_code}"
+    assert "john" in response.text
+
+    # test get_user - cookie only header
+    token = headers["Authorization"].split(" ")[1]
+    cookie_only = {"cookie": f"token={token}"}
+    response = test_client.get("/testing/current_user", headers=cookie_only)
+    assert response.status_code == 200, f"{response.text} - {response.status_code}"
+    assert "john" in response.text
+
+    # verify permission allowed for specific user
     response = test_client.get("/testing/", headers=headers)
     assert response.status_code == 200, f"{response.text} - {response.status_code}"
 
@@ -215,11 +227,11 @@ async def test_server_authentication(auth_test_server):
     response = test_client.get("/testing/actions", headers=headers)
     assert response.status_code == 403, f"{response.text} - {response.status_code}"
 
-    # verify permissoin denied without required action
+    # verify permission denied without required action
     response = test_client.get("/testing/roles", headers=headers)
     assert response.status_code == 403, f"{response.text} - {response.status_code}"
 
-    # verify permissoin denied without required action
+    # verify permission denied without required action
     response = test_client.get("/testing/groups", headers=headers)
     assert response.status_code == 403, f"{response.text} - {response.status_code}"
 
@@ -241,13 +253,13 @@ async def test_server_authentication(auth_test_server):
         response.status_code == 200
     ), f"new_token - actions {response.text} - {response.status_code}"
 
-    # verify permissoin denied without required action
+    # verify permission denied without required action
     response = test_client.get("/testing/roles", headers=headers)
     assert (
         response.status_code == 200
     ), f"new_token - roles {response.text} - {response.status_code}"
 
-    # verify permissoin denied without required action
+    # verify permission denied without required action
     response = test_client.get("/testing/groups", headers=headers)
     assert (
         response.status_code == 200

@@ -7,8 +7,7 @@ import requests
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from easyauth.client import EasyAuthClient
-from easyauth.pages import NotFoundPage
+from easyauth import get_user
 from easyauth.router import EasyAuthAPIRouter
 from easyauth.server import EasyAuthServer
 
@@ -154,6 +153,10 @@ async def auth_test_server(db_config):
         @test_auth_router.get("/actions", actions=["BASIC_CREATE"])
         async def action():
             return "I am actions"
+
+        @test_auth_router.get("/current_user", users=["john"])
+        async def current_user(user: str = get_user()):
+            return user
 
     with TestClient(server) as test_client:
         yield test_client

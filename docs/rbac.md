@@ -69,3 +69,32 @@ EasyAuthServer updates all EasyAuthServer workers & connected EasyAuthClients wh
 
 !!! TIP
     Tokens listed in the registry are seen as valid, and tokens which are revoked or do not exist in the registry, will return a 403.
+
+#### Get Current User
+Both EasyAuthServer / EasyAuthClients can determine the current user accessing an endpoint by adding `user: str = get_user()` to any easyauth decorated endpoint:
+
+
+```python
+#test_client.py
+from fastapi import FastAPI
+
+from easyauth.client import EasyAuthClient
+from easyauth import get_user
+
+server = FastAPI()
+
+@server.on_event('startup')
+async def startup():
+    server.auth = await EasyAuthClient.create(
+        server,
+        token_server='0.0.0.0',
+        token_server_port=8090,
+        auth_secret='abcd1234',
+        default_permissions={'groups': ['users']}
+    )
+
+    # grants access to users matching default_permissions
+    @server.auth.get('/default')
+    async def default(user: str = get_user()):
+        return f"{user} is accessing default endpoint"
+```

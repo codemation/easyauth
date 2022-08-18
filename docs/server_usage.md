@@ -101,6 +101,7 @@ async def startup():
 
 ```python
 from easyauth.router import EasyAuthAPIRouter
+from easyauth import get_user
 
 finance_router = EasyAuthAPIRouter.create(prefix='/finance', tags=['finance'])
 
@@ -109,8 +110,8 @@ async def finance_root():
     return f"fiance_root"
 
 @router.get('/data')
-async def finance_data():
-    return f"finance_data"
+async def finance_data(user: get_user()):
+    return f"{user} can access finance_data"
 
 ```
 !!! TIP
@@ -155,6 +156,7 @@ The EasyAuth Admin GUI is accessible by accessing the listening host:port at the
 ![](images/admin_gui.png)
 
 ### Docker
+The latest container TAGs are available on [DockerHub](https://hub.docker.com/r/joshjamison/easyauth), the latest tag will match the latest PYPI version.
 
 #### Start Auth Server
 
