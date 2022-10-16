@@ -372,7 +372,9 @@ async def api_setup(server):
             (easyauth_provider,) = await OauthConfig.filter(provider="easyauth")
 
             if easyauth_provider.default_groups and easyauth_provider.enabled:
-                user_info["groups"] = easyauth_provider.default_groups
+                user_info["groups"] = [
+                    g.group_name for g in easyauth_provider.default_groups
+                ]
 
         try:
             register_user = RegisterUser(
@@ -433,7 +435,7 @@ async def api_setup(server):
             return response
         return
 
-    async def __create_user(user: Users):
+    async def __create_user(user: UsersInput):
 
         if await Users.get(username=user.username) is not None:
             raise HTTPException(
