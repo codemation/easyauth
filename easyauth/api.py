@@ -368,7 +368,8 @@ async def api_setup(server):
         """
         # check default groups assignment
         if "groups" not in user_info or not user_info["groups"]:
-            easyauth_provider = await OauthConfig.filter(provider="easyauth")
+            # get and unpack easyauth_provider
+            (easyauth_provider,) = await OauthConfig.filter(provider="easyauth")
 
             if easyauth_provider.default_groups and easyauth_provider.enabled:
                 user_info["groups"] = easyauth_provider.default_groups
