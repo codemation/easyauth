@@ -137,7 +137,7 @@ async def api_setup(server):
                 status_code=404, detail=f"no service user with name {service} exists"
             )
 
-        if service_user["account_type"] != "service":
+        if service_user.account_type != "service":
             raise HTTPException(
                 status_code=400, detail=f"user {service} is not a service type account"
             )
@@ -211,7 +211,7 @@ async def api_setup(server):
 
             server.log.warning(f"refresh_access_token: called for user: {user[0]}")
             # get user permissions
-            permissions = await server.get_user_permissions(user_in_token)
+            permissions = await server.get_user_permissions(user)
 
             # generate RSA token
             token = await server.issue_token(permissions)
@@ -236,7 +236,7 @@ async def api_setup(server):
 
         user = await server.validate_user_pw(username, password)
         if user:
-            permissions = await server.get_user_permissions(user.username)
+            permissions = await server.get_user_permissions(user)
             token = await server.issue_token(permissions)
             return {"access_token": token, "token_type": "bearer"}
         raise InvalidUsernameOrPassword
@@ -252,7 +252,7 @@ async def api_setup(server):
                 detail="unable to authenticate with provided credentials",
             )
         # get user permissions
-        permissions = await server.get_user_permissions(form_data.username)
+        permissions = await server.get_user_permissions(user)
 
         # generate RSA token
         token = await server.issue_token(permissions)
@@ -293,7 +293,7 @@ async def api_setup(server):
             )
 
         # get user permissions
-        permissions = await server.get_user_permissions(username)
+        permissions = await server.get_user_permissions(user)
         token = await server.issue_token(permissions)
 
         # add token to cookie
@@ -535,8 +535,8 @@ async def api_setup(server):
 
     async def get_user_details(username: str):
         user = await verify_user(username)
+        permissions = await server.get_user_permissions(user)
         user = user.dict()
-        permissions = await server.get_user_permissions(username)
         user["permissions"] = permissions
         return user
 

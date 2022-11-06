@@ -40,6 +40,7 @@ from easyauth.models import (
     OauthConfig,
     PendingUsers,
     Roles,
+    Services,
     Tokens,
     Users,
 )
@@ -736,7 +737,7 @@ class EasyAuthServer:
             # no activation was required
             user = await Users.filter(email=email)
 
-        permissions = await self.get_user_permissions(user[0].username)
+        permissions = await self.get_user_permissions(user[0])
 
         return await self.issue_token(permissions)
 
@@ -763,13 +764,11 @@ class EasyAuthServer:
                 )
         return None
 
-    async def get_user_permissions(self, username: str) -> dict:
+    async def get_user_permissions(self, user: Union[Users, Services]) -> dict:
         """
         accepts validated user returned by validate_user_pw
         returns allowed permissions based on member group's roles / permissonis
         """
-        user = await Users.get(username=username)
-
         permissions = {}
 
         for group in user.groups:
