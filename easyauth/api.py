@@ -142,7 +142,7 @@ async def api_setup(server):
                 status_code=400, detail=f"user {service} is not a service type account"
             )
 
-        permissions = await server.get_user_permissions(service)
+        permissions = await server.get_user_permissions(service_user)
 
         token = await server.issue_token(permissions, days=999)
 
