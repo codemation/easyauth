@@ -130,7 +130,7 @@ async def api_setup(server):
         "/auth/serviceaccount/token/{service}", response_model=Token, tags=["Token"]
     )
     async def get_service_account_token(service: str):
-        service_user = await Users.get(username=service)
+        service_user = await Services.get(username=service)
 
         if service_user is None:
             raise HTTPException(
