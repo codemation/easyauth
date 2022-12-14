@@ -144,7 +144,7 @@ class EasyAuthServer:
             token_in_cookie = None
             auth_ind = None
             cookie_ind = None
-
+            
             for i, header in enumerate(request_dict["headers"]):
                 if "authorization" in header[0].decode() and header[1] is not None:
                     auth_ind = i
@@ -159,7 +159,7 @@ class EasyAuthServer:
                 if auth_ind:
                     request_dict["headers"].pop(auth_ind)
                 if request_dict["path"] != "/login":
-                    request_dict["headers"].append(
+                    request.headers.__dict__['_list'].append(
                         ("authorization".encode(), f"bearer {token_in_cookie}".encode())
                     )
                 else:
@@ -869,7 +869,7 @@ class EasyAuthServer:
 
                 try:
                     token = self.decode_token(token)[1]
-                except Exception:
+                except Exception as e:
                     self.log.error("error decoding token")
                     if (
                         response_class is HTMLResponse
