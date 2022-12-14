@@ -454,7 +454,7 @@ class EasyAuthClient:
             if token_in_cookie and not token_in_cookie == "INVALID":
                 if auth_ind:
                     request.headers.__dict__['_list'].pop(auth_ind)
-                if request_dict["path"] != "/login":
+                if request_dict["path"] != f"{default_login_path}":
                     request.headers.__dict__['_list'].append(
                         ("authorization".encode(), f"bearer {token_in_cookie}".encode())
                     )
