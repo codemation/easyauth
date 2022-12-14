@@ -144,7 +144,7 @@ class EasyAuthServer:
             token_in_cookie = None
             auth_ind = None
             cookie_ind = None
-            
+
             for i, header in enumerate(request_dict["headers"]):
                 if "authorization" in header[0].decode() and header[1] is not None:
                     auth_ind = i
@@ -157,9 +157,9 @@ class EasyAuthServer:
                             token_in_cookie = value
             if token_in_cookie and token_in_cookie != "INVALID":
                 if auth_ind:
-                    request.headers.__dict__['_list'].pop(auth_ind)
+                    request.headers.__dict__["_list"].pop(auth_ind)
                 if request_dict["path"] != "/login":
-                    request.headers.__dict__['_list'].append(
+                    request.headers.__dict__["_list"].append(
                         ("authorization".encode(), f"bearer {token_in_cookie}".encode())
                     )
                 else:
