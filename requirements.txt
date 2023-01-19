@@ -6,7 +6,7 @@ fastapi>=0.88.0
 uvicorn==0.15.0
 PyJWT==2.0.0
 python-multipart==0.0.5
-easyadmin==0.169
+easyadmin==0.170
 fastapi-mail==0.3.7
 gunicorn==20.1.0
 email-validator==1.1.3
