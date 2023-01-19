@@ -8,7 +8,7 @@ BASE_REQUIREMENTS = [
     "fastapi>=0.88.0",
     "uvicorn",
     "python-multipart==0.0.5",
-    "easyadmin==0.169",
+    "easyadmin==0.170",
     "easyrpc==0.245",
 ]
 SERVER_REQUIREMENTS = [
