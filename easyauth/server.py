@@ -40,6 +40,7 @@ from easyauth.models import (
     OauthConfig,
     PendingUsers,
     Roles,
+    Services,
     Tokens,
     Users,
 )
@@ -156,9 +157,9 @@ class EasyAuthServer:
                             token_in_cookie = value
             if token_in_cookie and token_in_cookie != "INVALID":
                 if auth_ind:
-                    request_dict["headers"].pop(auth_ind)
+                    request.headers.__dict__["_list"].pop(auth_ind)
                 if request_dict["path"] != "/login":
-                    request_dict["headers"].append(
+                    request.headers.__dict__["_list"].append(
                         ("authorization".encode(), f"bearer {token_in_cookie}".encode())
                     )
                 else:
@@ -736,7 +737,7 @@ class EasyAuthServer:
             # no activation was required
             user = await Users.filter(email=email)
 
-        permissions = await self.get_user_permissions(user[0].username)
+        permissions = await self.get_user_permissions(user[0])
 
         return await self.issue_token(permissions)
 
@@ -763,13 +764,11 @@ class EasyAuthServer:
                 )
         return None
 
-    async def get_user_permissions(self, username: str) -> dict:
+    async def get_user_permissions(self, user: Union[Users, Services]) -> dict:
         """
         accepts validated user returned by validate_user_pw
         returns allowed permissions based on member group's roles / permissonis
         """
-        user = await Users.get(username=username)
-
         permissions = {}
 
         for group in user.groups:
@@ -870,7 +869,7 @@ class EasyAuthServer:
 
                 try:
                     token = self.decode_token(token)[1]
-                except Exception:
+                except Exception as e:
                     self.log.error("error decoding token")
                     if (
                         response_class is HTMLResponse
