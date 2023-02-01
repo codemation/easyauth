@@ -961,7 +961,9 @@ class EasyAuthServer:
 
         return auth_endpoint
 
-    def parse_permissions(self, users, groups, roles, actions, default_permissions=None):
+    def parse_permissions(
+        self, users, groups, roles, actions, default_permissions=None
+    ):
         """
         returns permissions defined on a given endpoint if set
         if unset
