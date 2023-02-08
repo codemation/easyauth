@@ -1,10 +1,11 @@
 import pytest
 
+from easyauth.models import Actions, Groups, Roles, Users
+
 
 @pytest.mark.asyncio
 async def test_server_authentication(auth_test_server):
     test_client = auth_test_server
-    prefix = test_client.app.auth.ADMIN_PREFIX
     server = test_client.app
 
     # verify endpoint access fails without token
@@ -291,3 +292,38 @@ async def test_server_authentication(auth_test_server):
     assert (
         response.status_code == 403
     ), f"revoke_token - groups - {response.status_code} - {response.text}"
+
+    # test exporting config
+
+    good_credentials = {"username": "admin", "password": "easyauth"}
+
+    response = test_client.post("/auth/token/login", json=good_credentials)
+    assert response.status_code == 200, f"{response.text} - {response.status_code}"
+
+    token = response.json()
+
+    # verify endpoint access while using token
+
+    headers = {"Authorization": f"Bearer {token['access_token']}"}
+    response = test_client.get("/auth/export", headers=headers)
+    assert response.status_code == 200
+
+    config = response.json()
+    assert config
+
+    for rbac_item in ["users", "groups", "roles", "actions"]:
+        assert rbac_item in config
+
+    # use exported config to import
+    for Model in [Users, Groups, Roles, Actions]:
+        await Model.delete_many(await Model.all())
+
+    response = test_client.post("/auth/import", headers=headers, json=config)
+    assert response.status_code == 200
+
+    response = test_client.get("/auth/export", headers=headers)
+    assert response.status_code == 200
+
+    post_import_config = response.json()
+
+    assert post_import_config == config

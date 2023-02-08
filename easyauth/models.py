@@ -3,7 +3,7 @@ from enum import Enum
 from typing import List, Optional, Union
 
 from pydantic import BaseModel, EmailStr, root_validator
-from pydbantic import DataBaseModel
+from pydbantic import DataBaseModel, PrimaryKey
 
 
 # Model used to verify input when registering
@@ -36,12 +36,12 @@ class AccountType(str, Enum):
 
 
 class Actions(DataBaseModel):
-    action: str
-    details: str
+    action: str = PrimaryKey()
+    details: str = None
 
 
 class Roles(DataBaseModel):
-    role: str
+    role: str = PrimaryKey()
     actions: List[Actions] = []
 
 
@@ -50,7 +50,7 @@ class RolesInput(Roles):
 
 
 class Groups(DataBaseModel):
-    group_name: str
+    group_name: str = PrimaryKey()
     roles: List[Roles] = []
 
 
@@ -59,7 +59,7 @@ class GroupsInput(Groups):
 
 
 class BaseUser(DataBaseModel):
-    username: str = None
+    username: str = PrimaryKey()
     account_type: AccountType
     groups: List[Groups] = []
 
