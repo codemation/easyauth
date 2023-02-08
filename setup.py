@@ -12,7 +12,7 @@ BASE_REQUIREMENTS = [
     "easyrpc==0.245",
 ]
 SERVER_REQUIREMENTS = [
-    "pydbantic>=0.0.14",
+    "pydbantic>=0.0.22",
     "cryptography==35.0.0",
     "bcrypt==3.2.0",
     "example==0.1.0",
