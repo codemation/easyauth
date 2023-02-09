@@ -1,3 +1,4 @@
+import asyncio
 import os
 import subprocess
 import time
@@ -71,6 +72,16 @@ def db_config():
     )
 
 
+@pytest.fixture(scope="session")
+def event_loop():
+
+    policy = asyncio.get_event_loop_policy()
+    loop = policy.new_event_loop()
+    yield loop
+
+    loop.close()
+
+
 @pytest.fixture()
 def db_and_auth_server():
     for key, value in get_db_config().items():
@@ -106,13 +117,13 @@ def db_and_auth_server():
 
 @pytest.mark.asyncio
 @pytest.fixture()
-async def auth_test_server(db_config):
+async def auth_test_server(db_config, event_loop):
     server = FastAPI()
 
     os.environ["EASYAUTH_PATH"] = os.environ["PWD"]
 
     @server.on_event("startup")
-    async def startup():
+    async def setup():
         server.auth = await EasyAuthServer.create(
             server,
             "/auth/token",
@@ -158,8 +169,10 @@ async def auth_test_server(db_config):
         async def current_user(user: str = get_user()):
             return user
 
-    with TestClient(server) as test_client:
-        yield test_client
+        print(f"app - startup completed")
+
+    with TestClient(app=server) as test_cleint:
+        yield test_cleint
 
 
 class AuthClient:
