@@ -254,7 +254,10 @@ class EasyAuthServer:
             await asyncio.sleep(5)
 
         auth_server.log.warning("adding routers")
-        auth_server.include_routers()
+
+        @server.on_event("startup")
+        async def authserver_setup():
+            auth_server.startup_tasks()
 
         async def client_update(action: str, store: str, key: str, value: Any):
             """
@@ -404,6 +407,9 @@ class EasyAuthServer:
                 f"{os.environ['KEY_PATH']}/{os.environ['KEY_NAME']}.pub", "w"
             ) as pb:
                 pb.write(self._privkey.export_public())
+
+    async def startup_tasks(self):
+        self.include_routers()
 
     def include_routers(self):
         for auth_api_router in self.api_routers:
