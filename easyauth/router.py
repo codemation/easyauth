@@ -18,6 +18,7 @@ class EasyAuthAPIRouter:
         self.parent = parent
         self.server = api_router
         self.parent.api_routers.append(self)
+        self.parent.server.include_router(self.server)
         self.log = parent.log
         self.default_permissions = default_permissions
 
