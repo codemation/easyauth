@@ -489,16 +489,15 @@ class EasyAuthServer:
         encoded_password = self.encode(days=99000, password=password)
 
         await EmailConfig.create(
-            username=username,
-            password=encoded_password,
-            mail_from=mail_from,
-            mail_from_name=mail_from_name,
-            server=server,
-            port=port,
-            mail_tls=mail_tls,
-            mail_ssl=mail_ssl,
-            is_enabled=False,
-            send_activation_emails=send_activation_emails,
+            MAIL_USERNAME=username,
+            MAIL_PASSWORD=encoded_password,
+            MAIL_FROM=mail_from,
+            MAIL_FROM_NAME=mail_from_name,
+            MAIL_SERVER=server,
+            MAIL_PORT=port,
+            MAIL_TLS=mail_tls,
+            MAIL_SSL=False,
+            SEND_ACTIVATION_EMAILS=send_activation_emails
         )
 
         return "email setup completed"
