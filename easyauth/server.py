@@ -3,6 +3,7 @@ import datetime
 import json
 import logging
 import os
+import sys
 import random
 import string
 import subprocess
@@ -242,11 +243,10 @@ class EasyAuthServer:
         await frontend_setup(auth_server)
 
         if auth_server.leader:
-
             # create subprocess for manager proxy
             auth_server.log.warning(f"starting manager_proxy")
             auth_server.manager_proxy = subprocess.Popen(
-                f"gunicorn easyauth.manager_proxy:server -w 1 -k uvicorn.workers.UvicornWorker -b 127.0.0.1:8092".split(
+                f"{sys.executable} -m gunicorn easyauth.manager_proxy:server -w 1 -k uvicorn.workers.UvicornWorker -b 127.0.0.1:8092".split(
                     " "
                 )
             )
@@ -372,7 +372,7 @@ class EasyAuthServer:
                 datefmt="%m-%d %H:%M",
             )
             self.log = logging.getLogger("EasyAuthServer")
-            self.log.propogate = False
+            self.log.propagate = False
             self.log.setLevel(level)
         else:
             self.log = logger
@@ -497,7 +497,7 @@ class EasyAuthServer:
             MAIL_PORT=port,
             MAIL_TLS=mail_tls,
             MAIL_SSL=False,
-            SEND_ACTIVATION_EMAILS=send_activation_emails
+            SEND_ACTIVATION_EMAILS=send_activation_emails,
         )
 
         return "email setup completed"
@@ -513,21 +513,22 @@ class EasyAuthServer:
         if not conf:
             return f"no email server configured"
 
-        decoded = self.decode(conf[0]["password"])
+        decoded = self.decode(conf[0].MAIL_PASSWORD)
+        import pdb; pdb.set_trace()
 
-        conf[0]["password"] = decoded[1]["password"]
+        conf[0].MAIL_PASSWORD = decoded[1]["password"]
         conf = conf[0]
 
         conf = ConnectionConfig(
             **{
-                "MAIL_USERNAME": conf["username"],
-                "MAIL_PASSWORD": conf["password"],
-                "MAIL_FROM": conf["mail_from"],
-                "MAIL_PORT": conf["port"],
-                "MAIL_SERVER": conf["server"],
-                "MAIL_FROM_NAME": conf["mail_from_name"],
-                "MAIL_TLS": conf["mail_tls"],
-                "MAIL_SSL": conf["mail_ssl"],
+                "MAIL_USERNAME": conf.MAIL_USERNAME,
+                "MAIL_PASSWORD": conf.MAIL_PASSWORD,
+                "MAIL_FROM": conf.MAIL_FROM,
+                "MAIL_PORT": conf.MAIL_PORT,
+                "MAIL_SERVER": conf.MAIL_SERVER,
+                "MAIL_FROM_NAME": conf.MAIL_FROM_NAME,
+                "MAIL_TLS": conf.MAIL_TLS,
+                "MAIL_SSL": conf.MAIL_SSL,
             }
         )
 
