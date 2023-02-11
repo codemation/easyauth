@@ -120,11 +120,6 @@ class EasyAuthServer:
         # setup allowed origins - where can server receive token requests from
         self.cors_setup()
 
-        @server.on_event("startup")
-        async def setup():
-            self.log.warning("adding routers")
-            await self.include_routers()
-
         @server.on_event("shutdown")
         async def shutdown_auth_server():
             self.log.warning("EasyAuthServer - Starting shutdown process!")
@@ -257,6 +252,9 @@ class EasyAuthServer:
                 f"member - db setup complete - starting manager proxies"
             )
             await asyncio.sleep(5)
+
+        auth_server.log.warning("adding routers")
+        auth_server.include_routers()
 
         async def client_update(action: str, store: str, key: str, value: Any):
             """
@@ -407,7 +405,7 @@ class EasyAuthServer:
             ) as pb:
                 pb.write(self._privkey.export_public())
 
-    async def include_routers(self):
+    def include_routers(self):
         for auth_api_router in self.api_routers:
             self.server.include_router(auth_api_router.server)
 
@@ -632,6 +630,7 @@ class EasyAuthServer:
         asyncio.create_task(
             self.global_store_update("update", "tokens", key=token_id, value="")
         )
+        self.store["tokens"][token_id] = ""
 
         return token
 
