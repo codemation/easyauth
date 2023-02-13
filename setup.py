@@ -5,7 +5,7 @@ BASE_REQUIREMENTS = [
     "easyschedule==0.107",
     "PyJWT==2.0.0",
     "python-jwt==3.3.0",
-    "fastapi>=0.88.0",
+    "fastapi<=0.89.0",
     "uvicorn",
     "python-multipart==0.0.5",
     "easyadmin==0.170",
