@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import random
+import signal
 import string
 import subprocess
 import uuid
@@ -120,13 +121,15 @@ class EasyAuthServer:
         # setup allowed origins - where can server receive token requests from
         self.cors_setup()
 
-        @server.on_event("shutdown")
-        async def shutdown_auth_server():
-            self.log.warning("EasyAuthServer - Starting shutdown process!")
+        def shutdown_auth_server():
+            self.log.warning(
+                f"EasyAuthServer - Starting shutdown process! - {self.leader}"
+            )
             if self.leader:
-                shutdown_proxies = f"for pid in $(ps aux | grep {manager_proxy_port}' | awk '{{print $2}}'); do kill $pid; done"
-                os.system(shutdown_proxies)
+                os.killpg(os.getpgid(self.manager_proxy.pid), signal.SIGTERM)
             self.log.warning("EasyAuthServer - Finished shutdown process!")
+
+        self.shutdown_auth_server = shutdown_auth_server
 
         @NotFoundPage.mark()
         def default_not_found_page():
@@ -215,6 +218,7 @@ class EasyAuthServer:
         private_key: str = None,
     ):
 
+        os.environ["RPC_SECRET"] = auth_secret
         rpc_server = EasyRpcServer(server, "/ws/easyauth", server_secret=auth_secret)
 
         auth_server = cls(
@@ -245,7 +249,7 @@ class EasyAuthServer:
                     " "
                 )
             )
-            auth_server.log.warning(f"leader - waiting for members to start")
+            auth_server.log.warning(f"leader - waiting for members to join")
             await asyncio.sleep(5)
         else:
             auth_server.log.warning(
@@ -257,7 +261,7 @@ class EasyAuthServer:
 
         @server.on_event("startup")
         async def authserver_setup():
-            auth_server.startup_tasks()
+            await auth_server.startup_tasks()
 
         async def client_update(action: str, store: str, key: str, value: Any):
             """
@@ -342,18 +346,14 @@ class EasyAuthServer:
             return await auth_server.generate_google_oauth_token(auth_code=auth_code)
 
         if auth_server.leader:
-            await asyncio.sleep(1)
             valid_tokens = await Tokens.all()
             for token in valid_tokens:
                 await auth_server.global_store_update(
                     "update", "tokens", token.token_id, ""
                 )
-        else:
-            await asyncio.sleep(3)
-
-        auth_server.log.warning(
-            f"EasyAuthServer Started! - Loaded Tokens {auth_server.store['tokens']}"
-        )
+            auth_server.log.warning(
+                f"EasyAuthServer Started! - Loaded Tokens {auth_server.store['tokens']}"
+            )
 
         return auth_server
 
@@ -380,32 +380,28 @@ class EasyAuthServer:
 
     def key_setup(self):
         # check if keys exist in KEY_PATH else create
-        assert "KEY_PATH" in os.environ, f"missing KEY_PATH env variable"
         assert "KEY_NAME" in os.environ, f"missing KEY_NAME env variable"
+        key_path = os.getenv("KEY_PATH", "")
+        if key_path:
+            key_path = f"{key_path}/{os.environ['KEY_NAME']}.key"
+        else:
+            key_path = f"{os.environ['KEY_NAME']}"
 
         try:
-            with open(
-                f"{os.environ['KEY_PATH']}/{os.environ['KEY_NAME']}.key", "r"
-            ) as k:
+            with open(key_path + ".key", "r") as k:
                 self._privkey = jwk.JWK.from_json(k.readline())
         except Exception:
             # create private / public keys
             self._privkey = jwk.JWK.generate(
                 kid=self.generate_random_string(56), kty="RSA", size=2048
             )
-            with open(
-                f"{os.environ['KEY_PATH']}/{os.environ['KEY_NAME']}.key", "w"
-            ) as k:
+            with open(key_path + ".key", "w") as k:
                 k.write(self._privkey.export_private())
         try:
-            with open(
-                f"{os.environ['KEY_PATH']}/{os.environ['KEY_NAME']}.pub", "r"
-            ) as k:
+            with open(key_path + ".pub", "r") as k:
                 pass
         except Exception:
-            with open(
-                f"{os.environ['KEY_PATH']}/{os.environ['KEY_NAME']}.pub", "w"
-            ) as pb:
+            with open(key_path + ".pub", "w") as pb:
                 pb.write(self._privkey.export_public())
 
     async def startup_tasks(self):
@@ -583,7 +579,14 @@ class EasyAuthServer:
         token = await Tokens.get(token_id=token_id)
         if token:
             await token.delete()
-        await self.global_store_update("delete", "tokens", key=token_id, value="")
+        self.log.warning(f"Revoking token {token}")
+        if token_id in self.store["tokens"]:
+            del self.store["tokens"][token_id]
+        # beware - removing this from create task will cause
+        # you an immense amount of time in debugging
+        asyncio.create_task(
+            self.global_store_update("delete", "tokens", key=token_id, value="")
+        )
 
     async def token_cleanup(self):
         """
