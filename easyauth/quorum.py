@@ -28,15 +28,3 @@ async def quorum_setup(cache):
     with open("quorum.txt", "r") as q:
         if q.readline().rstrip() == member_id:
             cache.leader = True
-
-    if cache.leader:
-        RPC_SECRET = get_random_string(12)
-        with open(".rpc_secret", "w") as secret:
-            secret.write(RPC_SECRET)
-            os.environ["RPC_SECRET"] = RPC_SECRET
-            await asyncio.sleep(0.3)
-    else:
-        await asyncio.sleep(2)
-        with open(".rpc_secret", "r") as secret:
-            RPC_SECRET = secret.readline().rstrip()
-        os.environ["RPC_SECRET"] = RPC_SECRET
