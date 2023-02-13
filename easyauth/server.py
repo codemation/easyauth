@@ -410,6 +410,7 @@ class EasyAuthServer:
 
     async def startup_tasks(self):
         self.include_routers()
+        self.log.debug(f"completed including routers")
 
     def include_routers(self):
         for auth_api_router in self.api_routers:
@@ -633,10 +634,12 @@ class EasyAuthServer:
         # this should be done once issue token context exits
         # since this can be triggered by a client, which could not
         # correctly update its token id store while waiting on the issue_token response
+
+        self.store["tokens"][token_id] = ""
+
         asyncio.create_task(
             self.global_store_update("update", "tokens", key=token_id, value="")
         )
-        self.store["tokens"][token_id] = ""
 
         return token
 

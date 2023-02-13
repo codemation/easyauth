@@ -107,16 +107,12 @@ async def api_setup(server):
                 role = dict(role)
                 _role = Roles(**role)
                 await _role.save()
-                # for action in role["actions"]:
-                #    await verify_action(action)
 
         if "groups" in config:
             for group in config["groups"]:
                 group = dict(group)
                 _group = Groups(**group)
                 await _group.save()
-                # for role_name in group["roles"]:
-                #    await verify_role(role_name)
 
         if "users" in config:
             for user in config["users"]:
