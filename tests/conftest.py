@@ -5,6 +5,7 @@ import time
 
 import pytest
 import requests
+from asgi_lifespan import LifespanManager
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from httpx import AsyncClient
@@ -124,58 +125,58 @@ async def auth_test_server(db_config):
 
     os.environ["EASYAUTH_PATH"] = os.environ["PWD"]
 
-    server.auth = await EasyAuthServer.create(
-        server,
-        "/auth/token",
-        auth_secret="abcd1234",
-        admin_title="EasyAuth - Company",
-        admin_prefix="/admin",
-    )
+    @server.on_event("startup")
+    async def startup():
+        server.auth = await EasyAuthServer.create(
+            server,
+            "/auth/token",
+            auth_secret="abcd1234",
+            admin_title="EasyAuth - Company",
+            admin_prefix="/admin",
+        )
 
-    from .finance import finance
-    from .hr import hr
-    from .marketing import marketing
+        from .finance import finance
+        from .hr import hr
+        from .marketing import marketing
 
-    # test_auth_router = server.auth.create_api_router(prefix='/testing', tags=['testing'])
-    test_auth_router = EasyAuthAPIRouter.create(prefix="/testing", tags=["testing"])
+        # test_auth_router = server.auth.create_api_router(prefix='/testing', tags=['testing'])
+        test_auth_router = EasyAuthAPIRouter.create(prefix="/testing", tags=["testing"])
 
-    # grants access to users matching default_permissions
-    @test_auth_router.get("/default")
-    async def default():
-        return "I am default"
+        # grants access to users matching default_permissions
+        @test_auth_router.get("/default")
+        async def default():
+            return "I am default"
 
-    # grants access to only specified users
-    @test_auth_router.get("/", users=["john"])
-    async def root():
-        return "I am root"
+        # grants access to only specified users
+        @test_auth_router.get("/", users=["john"])
+        async def root():
+            return "I am root"
 
-    # grants access to members of 'users' or 'admins' group.
-    @test_auth_router.get("/groups", groups=["basic_users", "admins"])
-    async def groups():
-        return "I am groups"
+        # grants access to members of 'users' or 'admins' group.
+        @test_auth_router.get("/groups", groups=["basic_users", "admins"])
+        async def groups():
+            return "I am groups"
 
-    # grants access to all members of 'users' group
-    # or a groups with role of 'basic' or advanced
-    @test_auth_router.get("/roles", roles=["basic", "advanced"], groups=["users"])
-    async def roles():
-        return "Roles and Groups"
+        # grants access to all members of 'users' group
+        # or a groups with role of 'basic' or advanced
+        @test_auth_router.get("/roles", roles=["basic", "advanced"], groups=["users"])
+        async def roles():
+            return "Roles and Groups"
 
-    # grants access to all members of groups with a roles granting 'BASIC_CREATE'
-    @test_auth_router.get("/actions", actions=["BASIC_CREATE"])
-    async def action():
-        return "I am actions"
+        # grants access to all members of groups with a roles granting 'BASIC_CREATE'
+        @test_auth_router.get("/actions", actions=["BASIC_CREATE"])
+        async def action():
+            return "I am actions"
 
-    @test_auth_router.get("/current_user", users=["john"])
-    async def current_user(user: str = get_user()):
-        return user
+        @test_auth_router.get("/current_user", users=["john"])
+        async def current_user(user: str = get_user()):
+            return user
 
-    print(f"app - startup completed")
-    # trigger startup items
-    await server.auth.startup_tasks()
+    async with LifespanManager(server, startup_timeout=15):
+        with TestClient(server) as test_client:
+            yield test_client
 
-    async with AsyncClient(app=server, base_url="http://test") as api_client:
-        api_client.app = server
-        yield api_client
+    server.auth.shutdown_auth_server()
 
 
 class AuthClient:
