@@ -29,6 +29,7 @@ def manager_proxy_setup(server):
         # Rpc Server
         manager = await EasyRpcServer.create(server, **rpc_config)
         log = manager.log
+
         manager.scheduler = EasyScheduler()
 
         @manager.origin(namespace="manager")
@@ -41,7 +42,7 @@ def manager_proxy_setup(server):
                     continue
                 if "token_cleanup" in method:
                     continue
-
+                log.warning(f"global_store_update - {action} - {store} - {key}")
                 try:
                     asyncio.create_task(
                         client_methods[method](action, store, key, value)
