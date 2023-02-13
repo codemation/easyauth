@@ -2,7 +2,7 @@ pydbantic>=0.0.22
 bcrypt==3.2.0
 python-jwt==3.3.0
 makefun==1.9.5
-fastapi>=0.88.0
+fastapi<=0.89.1
 uvicorn==0.15.0
 PyJWT==2.0.0
 python-multipart==0.0.5
