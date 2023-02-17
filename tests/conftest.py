@@ -11,6 +11,8 @@ from fastapi.testclient import TestClient
 from httpx import AsyncClient
 
 from easyauth import get_user
+from easyauth.db import tables_setup
+from easyauth.models import Actions, Groups, Roles, Users
 from easyauth.router import EasyAuthAPIRouter
 from easyauth.server import EasyAuthServer
 
@@ -126,6 +128,11 @@ def db_and_auth_server():
     )
 
 
+async def clean_db():
+    for model in Actions, Groups, Roles, Users:
+        await model.delete_many(await model.all())
+
+
 @pytest.mark.asyncio
 @pytest.fixture()
 async def auth_test_server(db_config):
@@ -143,6 +150,8 @@ async def auth_test_server(db_config):
             admin_title="EasyAuth - Company",
             admin_prefix="/admin",
         )
+        await clean_db()
+        await tables_setup(server.auth)
 
         from .finance import finance
         from .hr import hr
@@ -181,9 +190,12 @@ async def auth_test_server(db_config):
         async def current_user(user: str = get_user()):
             return user
 
-    async with LifespanManager(server, startup_timeout=15):
-        async with AsyncClient(app=server, base_url="http://test") as test_client:
-            yield (test_client, server)
+    try:
+        async with LifespanManager(server, startup_timeout=15):
+            async with AsyncClient(app=server, base_url="http://test") as test_client:
+                yield (test_client, server)
+    except StopAsyncIteration:
+        pass
 
     server.auth.shutdown_auth_server()
 
