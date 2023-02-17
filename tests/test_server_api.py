@@ -270,7 +270,7 @@ async def test_server_authentication(auth_test_server: AsyncClient):
     ), f"new_token - groups {response.text} - {response.status_code}"
 
     decoded_token = server.auth.decode_token(token["access_token"])
-    print(decoded_token)
+
     assert "token_id" in decoded_token[1], f"{decoded_token}"
 
     # revoke token & test access failure
@@ -319,8 +319,7 @@ async def test_server_authentication(auth_test_server: AsyncClient):
 
     # use exported config to import
     for Model in [Users, Groups, Roles, Actions]:
-        models = await Model.all()
-        [await m.delete() for m in models]
+        await Model.delete_many(await Model.all())
 
     response = await test_client.post("/auth/import", headers=headers, json=config)
     assert response.status_code == 200
@@ -330,4 +329,4 @@ async def test_server_authentication(auth_test_server: AsyncClient):
 
     post_import_config = response.json()
 
-    assert post_import_config == config
+    assert post_import_config == config, f"{post_import_config} is not {config}"
