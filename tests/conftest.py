@@ -47,6 +47,15 @@ def get_db_config():
     os.environ["TEST_INIT_PASSWORD"] = "easyauth"
 
 
+@pytest.fixture(scope="session")
+def event_loop():
+    policy = asyncio.get_event_loop_policy()
+    loop = policy.new_event_loop()
+
+    yield loop
+    loop.close()
+
+
 @pytest.fixture()
 def db_config():
     for key, value in get_db_config().items():
@@ -173,7 +182,8 @@ async def auth_test_server(db_config):
             return user
 
     async with LifespanManager(server, startup_timeout=15):
-        with TestClient(server) as test_client:
+        async with AsyncClient(app=server, base_url="http://test") as test_client:
+            test_client.app = server
             yield test_client
 
     server.auth.shutdown_auth_server()
