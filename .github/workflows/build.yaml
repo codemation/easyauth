@@ -34,11 +34,6 @@ jobs:
         python-version: [3.9,3.10.8]
     steps:
       - uses: actions/checkout@v2
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
-      - name: build and run auth server image
-        run: |
-          docker build  -f docker/test-docker/Dockerfile-postgres -t joshjamison/easyauth:postgres .
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v2
         with:
@@ -59,6 +54,12 @@ jobs:
           export  KEY_NAME=test_key
           export ENV=postgres
           pytest tests/test_server_api.py -s
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+      - name: build and run auth server image
+        run: |
+          docker build  -f docker/test-docker/Dockerfile-postgres -t joshjamison/easyauth:postgres .
       - name: Test EasyAuth Client
         run: |
           export ENV=postgres
@@ -71,11 +72,6 @@ jobs:
         python-version: [3.8,3.9]
     steps:
       - uses: actions/checkout@v2
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
-      - name: build and run auth server image
-        run: |
-          docker build  -f docker/test-docker/Dockerfile-mysql -t joshjamison/easyauth:mysql .
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v2
         with:
@@ -99,6 +95,11 @@ jobs:
           echo "Sleeping to allow db to start"
           sleep 30
           pytest tests/test_server_api.py -s
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+      - name: build and run auth server image
+        run: |
+          docker build  -f docker/test-docker/Dockerfile-mysql -t joshjamison/easyauth:mysql .
       - name: Test EasyAuth Client
         run: |
           export ENV=mysql
@@ -111,11 +112,6 @@ jobs:
         python-version: [3.8,3.9,3.10.8]
     steps:
       - uses: actions/checkout@v2
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
-      - name: build and run auth server image
-        run: |
-          docker build  -f docker/test-docker/Dockerfile-sqlite -t joshjamison/easyauth:sqlite .
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v2
         with:
@@ -135,6 +131,11 @@ jobs:
           export  KEY_NAME=test_key
           export ENV=sqlite
           pytest tests/test_server_api.py -s
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+      - name: build and run auth server image
+        run: |
+          docker build  -f docker/test-docker/Dockerfile-sqlite -t joshjamison/easyauth:sqlite .
       - name: Test EasyAuth - Client
         run: |
           export ENV=sqlite
