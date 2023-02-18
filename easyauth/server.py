@@ -125,7 +125,7 @@ class EasyAuthServer:
             self.log.warning(
                 f"EasyAuthServer - Starting shutdown process! - {self.leader}"
             )
-            if self.leader:
+            if self.leader and hasattr(self, "manager_proxy"):
                 os.killpg(os.getpgid(self.manager_proxy.pid), signal.SIGTERM)
             self.log.warning("EasyAuthServer - Finished shutdown process!")
 
@@ -216,6 +216,7 @@ class EasyAuthServer:
         default_permission: dict = {"groups": ["administrators"]},
         secure: bool = False,
         private_key: str = None,
+        testing: bool = False,
     ):
 
         os.environ["RPC_SECRET"] = auth_secret
@@ -240,7 +241,7 @@ class EasyAuthServer:
         await api_setup(auth_server)
         await frontend_setup(auth_server)
 
-        if auth_server.leader:
+        if auth_server.leader and not testing:
 
             # create subprocess for manager proxy
             auth_server.log.warning(f"starting manager_proxy")
@@ -314,21 +315,22 @@ class EasyAuthServer:
         rpc_server.origin(token_cleanup, namespace="clients")
 
         # create connection to manager on 'manager' and 'clients' namespace
-        await rpc_server.create_server_proxy(
-            "127.0.0.1",
-            manager_proxy_port,
-            "/ws/manager",
-            server_secret=os.environ["RPC_SECRET"],
-            namespace="clients",
-        )
+        if not testing:
+            await rpc_server.create_server_proxy(
+                "127.0.0.1",
+                manager_proxy_port,
+                "/ws/manager",
+                server_secret=os.environ["RPC_SECRET"],
+                namespace="clients",
+            )
 
-        await rpc_server.create_server_proxy(
-            "127.0.0.1",
-            manager_proxy_port,
-            "/ws/manager",
-            server_secret=os.environ["RPC_SECRET"],
-            namespace="manager",
-        )
+            await rpc_server.create_server_proxy(
+                "127.0.0.1",
+                manager_proxy_port,
+                "/ws/manager",
+                server_secret=os.environ["RPC_SECRET"],
+                namespace="manager",
+            )
 
         @rpc_server.origin(namespace="easyauth")
         async def get_setup_info():
@@ -570,10 +572,12 @@ class EasyAuthServer:
         )
 
     async def global_store_update(self, action, store, key, value):
-        manager_methods = self.rpc_server["manager"]
-        if "global_store_update" in manager_methods:
-            await manager_methods["global_store_update"](action, store, key, value)
-        return
+        try:
+            manager_methods = self.rpc_server["manager"]
+            if "global_store_update" in manager_methods:
+                await manager_methods["global_store_update"](action, store, key, value)
+        except IndexError:
+            pass
 
     async def revoke_token(self, token_id: str):
         token = await Tokens.get(token_id=token_id)
