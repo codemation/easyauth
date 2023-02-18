@@ -318,15 +318,26 @@ async def test_server_authentication(auth_test_server: AsyncClient):
         assert rbac_item in config
 
     # use exported config to import
-    for Model in [Users, Groups, Roles, Actions]:
-        await Model.delete_many(await Model.all())
+
+    old_users = await Users.all(order_by=Users.asc("username"))
+    old_groups = await Groups.all(order_by=Groups.asc("group_name"))
+    old_roles = await Roles.all(order_by=Roles.asc("role"))
+    old_actions = await Actions.all(order_by=Actions.asc("action"))
+
+    await Users.delete_many(old_users)
+    await Groups.delete_many(old_groups)
+    await Roles.delete_many(old_roles)
+    await Actions.delete_many(old_actions)
 
     response = await test_client.post("/auth/import", headers=headers, json=config)
     assert response.status_code == 200
 
-    response = await test_client.get("/auth/export", headers=headers)
-    assert response.status_code == 200
+    new_users = await Users.all(order_by=Users.asc("username"))
+    new_groups = await Groups.all(order_by=Groups.asc("group_name"))
+    new_roles = await Roles.all(order_by=Roles.asc("role"))
+    new_actions = await Actions.all(order_by=Actions.asc("action"))
 
-    post_import_config = response.json()
-
-    assert post_import_config == config, f"{post_import_config} is not {config}"
+    assert new_users == old_users
+    assert new_groups == old_groups
+    assert new_roles == old_roles
+    assert new_actions == old_actions
