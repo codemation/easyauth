@@ -149,6 +149,7 @@ async def auth_test_server(db_config):
             auth_secret="abcd1234",
             admin_title="EasyAuth - Company",
             admin_prefix="/admin",
+            testing=True,
         )
         await clean_db()
         await tables_setup(server.auth)
