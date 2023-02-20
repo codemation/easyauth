@@ -6,8 +6,8 @@ from .conftest import AsyncClient
 
 
 @pytest.mark.asyncio
-async def test_server_authentication(auth_test_server: AsyncClient):
-    test_client, server = auth_test_server
+async def test_server_authentication(auth_test_server_and_clean_db: AsyncClient):
+    test_client, server = auth_test_server_and_clean_db
 
     # verify endpoint access fails without token
     response = await test_client.get("/finance/")
