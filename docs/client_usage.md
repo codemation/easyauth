@@ -11,41 +11,39 @@ from easyauth.client import EasyAuthClient
 
 server = FastAPI()
 
-@server.on_event('startup')
-async def startup():
-    server.auth = await EasyAuthClient.create(
-        server,
-        token_server='0.0.0.0',
-        token_server_port=8090,
-        auth_secret='abcd1234',
-        default_permissions={'groups': ['users']}
-    )
+server.auth = EasyAuthClient.create(
+    server,
+    token_server='0.0.0.0',
+    token_server_port=8090,
+    auth_secret='abcd1234',
+    default_permissions={'groups': ['users']}
+)
 
-    # grants access to users matching default_permissions
-    @server.auth.get('/default')
-    async def default():
-        return f"I am default"
+# grants access to users matching default_permissions
+@server.auth.get('/default')
+async def default():
+    return f"I am default"
 
-    # grants access to only specified users
-    @server.auth.get('/', users=['jane'])
-    async def root():
-        return f"I am root"
+# grants access to only specified users
+@server.auth.get('/', users=['jane'])
+async def root():
+    return f"I am root"
 
-    # grants access to members of 'users' or 'admins' group.
-    @server.auth.get('/groups', groups=['users', 'admins'])
-    async def groups(user: get_user()):
-        return f"{user} is in groups"
+# grants access to members of 'users' or 'admins' group.
+@server.auth.get('/groups', groups=['users', 'admins'])
+async def groups(user: get_user()):
+    return f"{user} is in groups"
 
-    # grants access to all members of 'users' group
-    # or a groups with role of 'basic' or advanced
-    @server.auth.get('/roles', roles=['basic', 'advanced'], groups=['users'])
-    async def roles():
-        return f"Roles and Groups"
+# grants access to all members of 'users' group
+# or a groups with role of 'basic' or advanced
+@server.auth.get('/roles', roles=['basic', 'advanced'], groups=['users'])
+async def roles():
+    return f"Roles and Groups"
 
-    # grants access to all members of groups with a roles granting 'BASIC_CREATE'
-    @server.auth.get('/actions', actions=['BASIC_CREATE'])
-    async def action():
-        return f"I am actions"
+# grants access to all members of groups with a roles granting 'BASIC_CREATE'
+@server.auth.get('/actions', actions=['BASIC_CREATE'])
+async def action():
+    return f"I am actions"
 ```
 !!! NOTE "default_permissions, if unspecified"
     {'groups': ['administrators']}
@@ -65,20 +63,18 @@ from easyauth.client import EasyAuthClient
 
 server = FastAPI(openapi_url="/groups/openapi.json")
 
-@server.on_event('startup')
-async def startup():
-    server.auth = await EasyAuthClient.create(
-        server,
-        token_server='0.0.0.0',
-        token_server_port=8090,
-        auth_secret='abcd1234',
-        default_permissions={'groups': ['users']}
-    )
+server.auth = EasyAuthClient.create(
+    server,
+    token_server='0.0.0.0',
+    token_server_port=8090,
+    auth_secret='abcd1234',
+    default_permissions={'groups': ['users']}
+)
 
-    # import sub modules
-    from .finance import finance
-    from .hr import hr
-    from .marketing import marketing
+# import sub modules
+from .finance import finance
+from .hr import hr
+from .marketing import marketing
 ```
 
 ```python
@@ -202,12 +198,12 @@ def custom_activation_page():
 The default `/login` and 401 redirect path can be overloaded by setting the `default_login_path` on `EasyAuthClient.create()`.
 
 ```python
-    server.auth = await EasyAuthClient.create(
-        server,
-        token_server='0.0.0.0',
-        token_server_port=8090,
-        auth_secret='abcd1234',
-        default_permissions={'groups': ['users']},
-        default_login_path='/v1/internal/login'
-    )
+server.auth = EasyAuthClient.create(
+    server,
+    token_server='0.0.0.0',
+    token_server_port=8090,
+    auth_secret='abcd1234',
+    default_permissions={'groups': ['users']},
+    default_login_path='/v1/internal/login'
+)
 ```

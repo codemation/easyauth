@@ -83,18 +83,16 @@ from easyauth import get_user
 
 server = FastAPI()
 
-@server.on_event('startup')
-async def startup():
-    server.auth = await EasyAuthClient.create(
-        server,
-        token_server='0.0.0.0',
-        token_server_port=8090,
-        auth_secret='abcd1234',
-        default_permissions={'groups': ['users']}
-    )
+server.auth = await EasyAuthClient.create(
+    server,
+    token_server='0.0.0.0',
+    token_server_port=8090,
+    auth_secret='abcd1234',
+    default_permissions={'groups': ['users']}
+)
 
-    # grants access to users matching default_permissions
-    @server.auth.get('/default')
-    async def default(user: str = get_user()):
-        return f"{user} is accessing default endpoint"
+# grants access to users matching default_permissions
+@server.auth.get('/default')
+async def default(user: str = get_user()):
+    return f"{user} is accessing default endpoint"
 ```
