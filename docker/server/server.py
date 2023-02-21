@@ -19,13 +19,10 @@ if not ADMIN_TITLE:
 if not ADMIN_PREFIX:
     ADMIN_PREFIX = "/admin"
 
-
-@server.on_event("startup")
-async def startup():
-    server.auth = await EasyAuthServer.create(
-        server,
-        "/auth/token",
-        auth_secret=AUTH_SECRET,
-        admin_title=ADMIN_TITLE,
-        admin_prefix=ADMIN_PREFIX,
-    )
+server.auth = EasyAuthServer.create(
+    server,
+    "/auth/token",
+    auth_secret=AUTH_SECRET,
+    admin_title=ADMIN_TITLE,
+    admin_prefix=ADMIN_PREFIX,
+)
