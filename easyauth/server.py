@@ -62,7 +62,6 @@ class EasyAuthServer:
         self,
         server: FastAPI,
         token_url: str,
-        rpc_server: EasyRpcServer,
         admin_title: str = "EasyAuth",
         admin_prefix: str = "/admin",
         logger: logging.Logger = None,
@@ -81,7 +80,6 @@ class EasyAuthServer:
         self.DEFAULT_PERMISSION = default_permission
 
         self.manager_proxy_port = manager_proxy_port
-        self.rpc_server = rpc_server
 
         # cookie security
         self.cookie_security = {
@@ -206,10 +204,6 @@ class EasyAuthServer:
             0, Middleware(BaseHTTPMiddleware, dispatch=handle_401_403)
         )
 
-        @self.rpc_server.origin(namespace="admin")
-        async def login_stuff():
-            pass
-
     @classmethod
     def create(
         cls,
@@ -229,12 +223,10 @@ class EasyAuthServer:
     ):
 
         os.environ["RPC_SECRET"] = auth_secret
-        rpc_server = EasyRpcServer(server, "/ws/easyauth", server_secret=auth_secret)
 
         auth_server = cls(
             server,
             token_url,
-            rpc_server,
             admin_title,
             admin_prefix,
             logger,
@@ -253,6 +245,9 @@ class EasyAuthServer:
         return auth_server
 
     async def setup(self, testing=False):
+        self.rpc_server = EasyRpcServer(
+            self.server, "/ws/easyauth", server_secret=os.environ["RPC_SECRET"]
+        )
         await database_setup(self)
         await api_setup(self)
         await frontend_setup(self)
