@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import random
+import signal
 import string
 import subprocess
 import uuid
@@ -25,6 +26,8 @@ from fastapi_mail import ConnectionConfig, FastMail, MessageSchema
 from google.auth.transport import requests
 from google.oauth2 import id_token
 from makefun import wraps
+from starlette.middleware import Middleware
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from easyauth.api import api_setup
 from easyauth.db import database_setup
@@ -59,7 +62,6 @@ class EasyAuthServer:
         self,
         server: FastAPI,
         token_url: str,
-        rpc_server: EasyRpcServer,
         admin_title: str = "EasyAuth",
         admin_prefix: str = "/admin",
         logger: logging.Logger = None,
@@ -73,10 +75,11 @@ class EasyAuthServer:
         self.server = server
         self.server.title = admin_title
         self.ADMIN_PREFIX = admin_prefix
+        self.token_url = token_url
         self.oauth2_scheme = OAuth2PasswordBearer(tokenUrl=token_url)  # /token
         self.DEFAULT_PERMISSION = default_permission
 
-        self.rpc_server = rpc_server
+        self.manager_proxy_port = manager_proxy_port
 
         # cookie security
         self.cookie_security = {
@@ -120,24 +123,20 @@ class EasyAuthServer:
         # setup allowed origins - where can server receive token requests from
         self.cors_setup()
 
-        @server.on_event("startup")
-        async def setup():
-            self.log.warning("adding routers")
-            await self.include_routers()
-
-        @server.on_event("shutdown")
-        async def shutdown_auth_server():
-            self.log.warning("EasyAuthServer - Starting shutdown process!")
-            if self.leader:
-                shutdown_proxies = f"for pid in $(ps aux | grep {manager_proxy_port}' | awk '{{print $2}}'); do kill $pid; done"
-                os.system(shutdown_proxies)
+        def shutdown_auth_server():
+            self.log.warning(
+                f"EasyAuthServer - Starting shutdown process! - {self.leader}"
+            )
+            if self.leader and hasattr(self, "manager_proxy"):
+                os.killpg(os.getpgid(self.manager_proxy.pid), signal.SIGTERM)
             self.log.warning("EasyAuthServer - Finished shutdown process!")
+
+        self.shutdown_auth_server = shutdown_auth_server
 
         @NotFoundPage.mark()
         def default_not_found_page():
             return HTMLResponse(self.admin.not_found_page(), status_code=404)
 
-        @server.middleware("http")
         async def detect_token_in_cookie(request, call_next):
             request_dict = dict(request)
             request_header = dict(request.headers)
@@ -172,10 +171,12 @@ class EasyAuthServer:
 
             return await call_next(request)
 
-        @server.middleware("http")
+        server.user_middleware.insert(
+            0, Middleware(BaseHTTPMiddleware, dispatch=detect_token_in_cookie)
+        )
+
         async def handle_401_403(request, call_next):
             response = await call_next(request)
-            request_dict = dict(request)
 
             if response.status_code in [401, 404]:
                 if "text/html" in request.headers["accept"]:
@@ -199,12 +200,12 @@ class EasyAuthServer:
                 )
             return response
 
-        @self.rpc_server.origin(namespace="admin")
-        async def login_stuff():
-            pass
+        server.user_middleware.insert(
+            0, Middleware(BaseHTTPMiddleware, dispatch=handle_401_403)
+        )
 
     @classmethod
-    async def create(
+    def create(
         cls,
         server: FastAPI,
         token_url: str,
@@ -218,14 +219,14 @@ class EasyAuthServer:
         default_permission: dict = {"groups": ["administrators"]},
         secure: bool = False,
         private_key: str = None,
+        testing: bool = False,
     ):
 
-        rpc_server = EasyRpcServer(server, "/ws/easyauth", server_secret=auth_secret)
+        os.environ["RPC_SECRET"] = auth_secret
 
         auth_server = cls(
             server,
             token_url,
-            rpc_server,
             admin_title,
             admin_prefix,
             logger,
@@ -237,32 +238,44 @@ class EasyAuthServer:
             private_key,
         )
 
-        await database_setup(auth_server)
-        await api_setup(auth_server)
-        await frontend_setup(auth_server)
+        @server.on_event("startup")
+        async def auth_setup():
+            await auth_server.setup(testing=testing)
 
-        if auth_server.leader:
+        return auth_server
+
+    async def setup(self, testing=False):
+        self.rpc_server = EasyRpcServer(
+            self.server, "/ws/easyauth", server_secret=os.environ["RPC_SECRET"]
+        )
+        await database_setup(self)
+        await api_setup(self)
+        await frontend_setup(self)
+
+        if self.leader and not testing:
 
             # create subprocess for manager proxy
-            auth_server.log.warning(f"starting manager_proxy")
-            auth_server.manager_proxy = subprocess.Popen(
+            self.log.warning(f"starting manager_proxy")
+            self.manager_proxy = subprocess.Popen(
                 f"gunicorn easyauth.manager_proxy:server -w 1 -k uvicorn.workers.UvicornWorker -b 127.0.0.1:8092".split(
                     " "
                 )
             )
-            auth_server.log.warning(f"leader - waiting for members to start")
+            self.log.warning(f"leader - waiting for members to join")
             await asyncio.sleep(5)
         else:
-            auth_server.log.warning(
-                f"member - db setup complete - starting manager proxies"
-            )
+            self.log.warning(f"member - db setup complete - starting manager proxies")
             await asyncio.sleep(5)
+
+        self.log.warning("adding routers")
+
+        await self.startup_tasks()
 
         async def client_update(action: str, store: str, key: str, value: Any):
             """
             update every connected client
             """
-            clients = auth_server.rpc_server["global_store"]
+            clients = self.rpc_server["global_store"]
             for client in clients:
                 if client == "get_store_data":
                     continue
@@ -270,7 +283,7 @@ class EasyAuthServer:
             return f"client_update completed"
 
         async def token_cleanup():
-            return await auth_server.token_cleanup()
+            return await self.token_cleanup()
 
         client_id = "_".join(str(uuid.uuid4()).split("-"))
 
@@ -278,83 +291,77 @@ class EasyAuthServer:
         token_cleanup.__name__ = token_cleanup.__name__ + client_id
 
         # initialize global storage
-        auth_server.store = {"tokens": {}}
+        self.store = {"tokens": {}}
 
         async def store_data(action: str, store: str, key: str, value: Any = None):
             """
             actions:
                 - put|update|delete
             """
-            if store not in auth_server.store:
-                auth_server.store[store] = {}
+            if store not in self.store:
+                self.store[store] = {}
             if action in {"update", "put"}:
-                auth_server.store[store][key] = value
+                self.store[store][key] = value
             else:
-                if key in auth_server.store[store]:
-                    del auth_server.store[store][key]
+                if key in self.store[store]:
+                    del self.store[store][key]
 
             return f"{action} in {store} with {key} completed"
 
         store_data.__name__ = store_data.__name__ + client_id
+        rpc_server = self.rpc_server
 
         rpc_server.origin(store_data, namespace="global_store")
 
         @rpc_server.origin(namespace="global_store")
         async def get_store_data():
             rpc_server.get_all_registered_functions(namespace="global_store")
-            return auth_server.store
+            return self.store
 
         # register unique client_update in clients namespace
         rpc_server.origin(client_update, namespace="clients")
         rpc_server.origin(token_cleanup, namespace="clients")
 
         # create connection to manager on 'manager' and 'clients' namespace
-        await rpc_server.create_server_proxy(
-            "127.0.0.1",
-            manager_proxy_port,
-            "/ws/manager",
-            server_secret=os.environ["RPC_SECRET"],
-            namespace="clients",
-        )
+        if not testing:
+            await rpc_server.create_server_proxy(
+                "127.0.0.1",
+                self.manager_proxy_port,
+                "/ws/manager",
+                server_secret=os.environ["RPC_SECRET"],
+                namespace="clients",
+            )
 
-        await rpc_server.create_server_proxy(
-            "127.0.0.1",
-            manager_proxy_port,
-            "/ws/manager",
-            server_secret=os.environ["RPC_SECRET"],
-            namespace="manager",
-        )
+            await rpc_server.create_server_proxy(
+                "127.0.0.1",
+                self.manager_proxy_port,
+                "/ws/manager",
+                server_secret=os.environ["RPC_SECRET"],
+                namespace="manager",
+            )
 
         @rpc_server.origin(namespace="easyauth")
         async def get_setup_info():
             return {
-                "token_url": token_url,
-                "public_rsa": auth_server._privkey.export_public(),
+                "token_url": self.token_url,
+                "public_rsa": self._privkey.export_public(),
             }
 
         @rpc_server.origin(namespace="easyauth")
         async def get_identity_providers():
-            return await auth_server.get_identity_providers()
+            return await self.get_identity_providers()
 
         @rpc_server.origin(namespace="easyauth")
         async def generate_google_oauth_token(auth_code):
-            return await auth_server.generate_google_oauth_token(auth_code=auth_code)
+            return await self.generate_google_oauth_token(auth_code=auth_code)
 
-        if auth_server.leader:
-            await asyncio.sleep(1)
+        if self.leader:
             valid_tokens = await Tokens.all()
             for token in valid_tokens:
-                await auth_server.global_store_update(
-                    "update", "tokens", token.token_id, ""
-                )
-        else:
-            await asyncio.sleep(3)
-
-        auth_server.log.warning(
-            f"EasyAuthServer Started! - Loaded Tokens {auth_server.store['tokens']}"
-        )
-
-        return auth_server
+                await self.global_store_update("update", "tokens", token.token_id, "")
+            self.log.warning(
+                f"EasyAuthServer Started! - Loaded Tokens {self.store['tokens']}"
+            )
 
     def load_env_from_file(self, file_path):
         self.log.warning(f"loading env vars from {file_path}")
@@ -379,35 +386,35 @@ class EasyAuthServer:
 
     def key_setup(self):
         # check if keys exist in KEY_PATH else create
-        assert "KEY_PATH" in os.environ, f"missing KEY_PATH env variable"
         assert "KEY_NAME" in os.environ, f"missing KEY_NAME env variable"
+        key_path = os.getenv("KEY_PATH", "")
+        if key_path:
+            key_path = f"{key_path}/{os.environ['KEY_NAME']}.key"
+        else:
+            key_path = f"{os.environ['KEY_NAME']}"
 
         try:
-            with open(
-                f"{os.environ['KEY_PATH']}/{os.environ['KEY_NAME']}.key", "r"
-            ) as k:
+            with open(key_path + ".key", "r") as k:
                 self._privkey = jwk.JWK.from_json(k.readline())
         except Exception:
             # create private / public keys
             self._privkey = jwk.JWK.generate(
                 kid=self.generate_random_string(56), kty="RSA", size=2048
             )
-            with open(
-                f"{os.environ['KEY_PATH']}/{os.environ['KEY_NAME']}.key", "w"
-            ) as k:
+            with open(key_path + ".key", "w") as k:
                 k.write(self._privkey.export_private())
         try:
-            with open(
-                f"{os.environ['KEY_PATH']}/{os.environ['KEY_NAME']}.pub", "r"
-            ) as k:
+            with open(key_path + ".pub", "r") as k:
                 pass
         except Exception:
-            with open(
-                f"{os.environ['KEY_PATH']}/{os.environ['KEY_NAME']}.pub", "w"
-            ) as pb:
+            with open(key_path + ".pub", "w") as pb:
                 pb.write(self._privkey.export_public())
 
-    async def include_routers(self):
+    async def startup_tasks(self):
+        self.include_routers()
+        self.log.debug(f"completed including routers")
+
+    def include_routers(self):
         for auth_api_router in self.api_routers:
             self.server.include_router(auth_api_router.server)
 
@@ -559,7 +566,6 @@ class EasyAuthServer:
 
     def cors_setup(self):
         origins = ["*"]
-
         self.server.add_middleware(
             CORSMiddleware,
             allow_origins=origins,
@@ -569,16 +575,25 @@ class EasyAuthServer:
         )
 
     async def global_store_update(self, action, store, key, value):
-        manager_methods = self.rpc_server["manager"]
-        if "global_store_update" in manager_methods:
-            await manager_methods["global_store_update"](action, store, key, value)
-        return
+        try:
+            manager_methods = self.rpc_server["manager"]
+            if "global_store_update" in manager_methods:
+                await manager_methods["global_store_update"](action, store, key, value)
+        except IndexError:
+            pass
 
     async def revoke_token(self, token_id: str):
         token = await Tokens.get(token_id=token_id)
         if token:
             await token.delete()
-        await self.global_store_update("delete", "tokens", key=token_id, value="")
+        self.log.warning(f"Revoking token {token}")
+        if token_id in self.store["tokens"]:
+            del self.store["tokens"][token_id]
+        # beware - removing this from create task will cause
+        # you an immense amount of time in debugging
+        asyncio.create_task(
+            self.global_store_update("delete", "tokens", key=token_id, value="")
+        )
 
     async def token_cleanup(self):
         """
@@ -629,6 +644,9 @@ class EasyAuthServer:
         # this should be done once issue token context exits
         # since this can be triggered by a client, which could not
         # correctly update its token id store while waiting on the issue_token response
+
+        self.store["tokens"][token_id] = ""
+
         asyncio.create_task(
             self.global_store_update("update", "tokens", key=token_id, value="")
         )

@@ -29,16 +29,14 @@ from easyauth.server import EasyAuthServer
 
 server = FastAPI()
 
-@server.on_event('startup')
-async def startup():
-    server.auth = await EasyAuthServer.create(
-        server,
-        '/auth/token',
-        auth_secret='abcd1234',
-        admin_title='EasyAuth - Company',
-        admin_prefix='/admin',
-        env_from_file='server_sqlite.json'
-    )
+server.auth = await EasyAuthServer.create(
+    server,
+    '/auth/token',
+    auth_secret='abcd1234',
+    admin_title='EasyAuth - Company',
+    admin_prefix='/admin',
+    env_from_file='server_sqlite.json'
+)
 
 ```
 !!! SUCCESS "Start Server"
@@ -82,21 +80,19 @@ from easyauth.server import EasyAuthServer
 
 server = FastAPI()
 
-@server.on_event('startup')
-async def startup():
-    server.auth = await EasyAuthServer.create(
-        server,
-        '/auth/token',
-        auth_secret='abcd1234',
-        admin_title='EasyAuth - Company',
-        admin_prefix='/admin',
-        env_from_file='server_sqlite.json'
-    )
+server.auth = EasyAuthServer.create(
+    server,
+    '/auth/token',
+    auth_secret='abcd1234',
+    admin_title='EasyAuth - Company',
+    admin_prefix='/admin',
+    env_from_file='server_sqlite.json'
+)
 
-    # import sub modules
-    from .finance import finance
-    from .hr import hr
-    from .marketing import marketing
+# import sub modules
+from .finance import finance
+from .hr import hr
+from .marketing import marketing
 ```
 
 ```python

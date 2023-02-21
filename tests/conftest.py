@@ -1,13 +1,18 @@
+import asyncio
 import os
 import subprocess
 import time
 
 import pytest
 import requests
+from asgi_lifespan import LifespanManager
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from httpx import AsyncClient
 
 from easyauth import get_user
+from easyauth.db import tables_setup
+from easyauth.models import Actions, Groups, Roles, Users
 from easyauth.router import EasyAuthAPIRouter
 from easyauth.server import EasyAuthServer
 
@@ -44,6 +49,15 @@ def get_db_config():
     os.environ["TEST_INIT_PASSWORD"] = "easyauth"
 
 
+@pytest.fixture(scope="session")
+def event_loop():
+    policy = asyncio.get_event_loop_policy()
+    loop = policy.new_event_loop()
+
+    yield loop
+    loop.close()
+
+
 @pytest.fixture()
 def db_config():
     for key, value in get_db_config().items():
@@ -69,6 +83,16 @@ def db_config():
         if not os.environ["ENV"] == "sqlite"
         else None
     )
+
+
+@pytest.fixture(scope="session")
+def event_loop():
+
+    policy = asyncio.get_event_loop_policy()
+    loop = policy.new_event_loop()
+    yield loop
+
+    loop.close()
 
 
 @pytest.fixture()
@@ -104,62 +128,77 @@ def db_and_auth_server():
     )
 
 
+async def clean_db():
+    for model in Actions, Groups, Roles, Users:
+        await model.delete_many(await model.all())
+
+
 @pytest.mark.asyncio
 @pytest.fixture()
 async def auth_test_server(db_config):
+
     server = FastAPI()
+    server.auth = EasyAuthServer.create(
+        server,
+        "/auth/token",
+        auth_secret="abcd1234",
+        admin_title="EasyAuth - Company",
+        admin_prefix="/admin",
+        testing=True,
+    )
+
+    from .finance import finance
+    from .hr import hr
+    from .marketing import marketing
+
+    # test_auth_router = server.auth.create_api_router(prefix='/testing', tags=['testing'])
+    test_auth_router = EasyAuthAPIRouter.create(prefix="/testing", tags=["testing"])
+
+    # grants access to users matching default_permissions
+    @test_auth_router.get("/default")
+    async def default():
+        return "I am default"
+
+    # grants access to only specified users
+    @test_auth_router.get("/", users=["john"])
+    async def root():
+        return "I am root"
+
+    # grants access to members of 'users' or 'admins' group.
+    @test_auth_router.get("/groups", groups=["basic_users", "admins"])
+    async def groups():
+        return "I am groups"
+
+    # grants access to all members of 'users' group
+    # or a groups with role of 'basic' or advanced
+    @test_auth_router.get("/roles", roles=["basic", "advanced"], groups=["users"])
+    async def roles():
+        return "Roles and Groups"
+
+    # grants access to all members of groups with a roles granting 'BASIC_CREATE'
+    @test_auth_router.get("/actions", actions=["BASIC_CREATE"])
+    async def action():
+        return "I am actions"
+
+    @test_auth_router.get("/current_user", users=["john"])
+    async def current_user(user: str = get_user()):
+        return user
 
     os.environ["EASYAUTH_PATH"] = os.environ["PWD"]
 
-    @server.on_event("startup")
-    async def startup():
-        server.auth = await EasyAuthServer.create(
-            server,
-            "/auth/token",
-            auth_secret="abcd1234",
-            admin_title="EasyAuth - Company",
-            admin_prefix="/admin",
-        )
+    async with LifespanManager(server, startup_timeout=15):
+        async with AsyncClient(app=server, base_url="http://test") as test_client:
+            yield (test_client, server)
 
-        from .finance import finance
-        from .hr import hr
-        from .marketing import marketing
+    server.auth.shutdown_auth_server()
 
-        # test_auth_router = server.auth.create_api_router(prefix='/testing', tags=['testing'])
-        test_auth_router = EasyAuthAPIRouter.create(prefix="/testing", tags=["testing"])
 
-        # grants access to users matching default_permissions
-        @test_auth_router.get("/default")
-        async def default():
-            return "I am default"
-
-        # grants access to only specified users
-        @test_auth_router.get("/", users=["john"])
-        async def root():
-            return "I am root"
-
-        # grants access to members of 'users' or 'admins' group.
-        @test_auth_router.get("/groups", groups=["basic_users", "admins"])
-        async def groups():
-            return "I am groups"
-
-        # grants access to all members of 'users' group
-        # or a groups with role of 'basic' or advanced
-        @test_auth_router.get("/roles", roles=["basic", "advanced"], groups=["users"])
-        async def roles():
-            return "Roles and Groups"
-
-        # grants access to all members of groups with a roles granting 'BASIC_CREATE'
-        @test_auth_router.get("/actions", actions=["BASIC_CREATE"])
-        async def action():
-            return "I am actions"
-
-        @test_auth_router.get("/current_user", users=["john"])
-        async def current_user(user: str = get_user()):
-            return user
-
-    with TestClient(server) as test_client:
-        yield test_client
+@pytest.mark.asyncio
+@pytest.fixture()
+async def auth_test_server_and_clean_db(auth_test_server):
+    await clean_db()
+    await tables_setup(auth_test_server[1].auth)
+    yield auth_test_server
 
 
 class AuthClient:
