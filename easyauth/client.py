@@ -67,23 +67,24 @@ class EasyAuthClient:
     def __init__(
         self,
         server: FastAPI,
-        rpc_server: EasyRpcServer,
-        token_url: str,
-        public_key: str,
+        auth_secret: str,
+        token_server: str = None,
+        token_server_port: int = None,
         logger: logging.Logger = None,
         env_from_file: str = None,
         debug: bool = False,
         default_permissions: dict = {"groups": ["administrators"]},
         secure: bool = False,
         default_login_path: str = "/login",
+        default_login_redirect: str = "/",
     ):
         self.server = server
-        self.oauth2_scheme = OAuth2PasswordBearer(tokenUrl=token_url)  # /token
+        self.token_server = token_server
+        self.token_server_port = token_server_port
+
         self.default_permissions = default_permissions
 
         self.admin = Admin("EasyAuthClient", side_bar_sections=[])
-        self.token_url = token_url
-        self._public_key = jwk.JWK.from_json(public_key)
 
         # cookie security
         self.cookie_security = {
@@ -93,6 +94,7 @@ class EasyAuthClient:
 
         # default login path
         self.default_login_path = default_login_path
+        self.default_login_redirect = default_login_redirect
 
         # ensure new routers created follow same oath scheme
         EasyAuthAPIRouter.parent = self
@@ -105,7 +107,8 @@ class EasyAuthClient:
         }:
             page.parent = self
 
-        self.rpc_server = rpc_server
+        self.auth_secret = auth_secret
+        self.oauth2_scheme = OAuth2PasswordBearer(tokenUrl=self.default_login_path)
 
         # extra routers
         self.api_routers = []
@@ -120,7 +123,7 @@ class EasyAuthClient:
             self.load_env_from_file(env_from_file)
 
     @classmethod
-    async def create(
+    def create(
         cls,
         server: FastAPI,
         token_url: str = None,
@@ -153,83 +156,139 @@ class EasyAuthClient:
             ],
         )
 
-        rpc_server = EasyRpcServer(
-            server, "/ws/easyauth", server_secret=auth_secret, logger=log
-        )
-
-        try:
-            await rpc_server.create_server_proxy(
-                token_server,
-                token_server_port,
-                "/ws/easyauth",
-                server_secret=auth_secret,
-                namespace="global_store",
-            )
-
-            await rpc_server.create_server_proxy(
-                token_server,
-                token_server_port,
-                "/ws/easyauth",
-                server_secret=auth_secret,
-                namespace="easyauth",
-            )
-
-        except Exception:
-            setup_error = log.exception(
-                f"error creating connction to EasyAuthServer {token_server}:{token_server_port}"
-            )
-
-        if setup_error is not None:
-            assert False, f"EasyAuthClient - exiting"
-
-        setup_info = await rpc_server["easyauth"]["get_setup_info"]()
-
         auth_server = cls(
             server,
-            rpc_server,
-            f"http://{token_server}:{token_server_port}{setup_info['token_url']}",
-            setup_info["public_rsa"],
+            auth_secret,
+            token_server,
+            token_server_port,
             logger,
             debug,
             env_from_file,
             default_permissions,
             secure,
             default_login_path,
+            default_login_redirect,
         )
-        auth_server.scheduler = EasyScheduler()
 
-        @auth_server.scheduler("* * * * *")
+        @server.on_event("startup")
+        async def auth_setup():
+            await auth_server.setup()
+
+        @server.middleware("http")
+        async def detect_token_in_cookie(request, call_next):
+            request_dict = dict(request)
+            token_in_cookie = None
+            auth_ind = None
+            cookie_ind = None
+            for i, header in enumerate(request_dict["headers"]):
+                if "authorization" in header[0].decode():
+                    if not header[1] is None:
+                        auth_ind = i
+                if "cookie" in header[0].decode():
+                    cookie_ind = i
+                    cookies = header[1].decode().split(",")
+                    for cookie in cookies[0].split("; "):
+                        key, value = cookie.split("=")
+                        if key == "token":
+                            token_in_cookie = value
+            if token_in_cookie and not token_in_cookie == "INVALID":
+                if auth_ind:
+                    request.headers.__dict__["_list"].pop(auth_ind)
+                if request_dict["path"] != f"{auth_server.default_login_path}":
+                    request.headers.__dict__["_list"].append(
+                        ("authorization".encode(), f"bearer {token_in_cookie}".encode())
+                    )
+                else:
+                    return RedirectResponse("/logout")
+            else:
+                if not request_dict["path"] == f"{auth_server.default_login_path}":
+                    token_in_cookie = (
+                        "NO_TOKEN" if not token_in_cookie else token_in_cookie
+                    )
+                    request_dict["headers"].append(
+                        ("authorization".encode(), f"bearer {token_in_cookie}".encode())
+                    )
+            response = await call_next(request)
+            if response.status_code == 404 and "text/html" in request.headers["accept"]:
+                if hasattr(auth_server, "html_not_found_page"):
+                    return HTMLResponse(
+                        auth_server.html_not_found_page(), status_code=404
+                    )
+
+                return HTMLResponse(auth_server.admin.not_found_page(), status_code=404)
+            return response
+
+        return auth_server
+
+    async def setup(self):
+        rpc_server = EasyRpcServer(
+            self.server, "/ws/easyauth", server_secret=self.auth_secret, logger=self.log
+        )
+        self.rpc_server = rpc_server
+
+        try:
+            await rpc_server.create_server_proxy(
+                self.token_server,
+                self.token_server_port,
+                "/ws/easyauth",
+                server_secret=self.auth_secret,
+                namespace="global_store",
+            )
+
+            await rpc_server.create_server_proxy(
+                self.token_server,
+                self.token_server_port,
+                "/ws/easyauth",
+                server_secret=self.auth_secret,
+                namespace="easyauth",
+            )
+
+        except Exception:
+            setup_error = self.log.exception(
+                f"error creating connction to EasyAuthServer {self.token_server}:{self.token_server_port}"
+            )
+
+        setup_info = await rpc_server["easyauth"]["get_setup_info"]()
+
+        self.token_url = setup_info["token_url"]
+        self._public_key = jwk.JWK.from_json(setup_info["public_rsa"])
+
+        setup_info = await rpc_server["easyauth"]["get_setup_info"]()
+
+        self.scheduler = EasyScheduler()
+
+        @self.scheduler("* * * * *")
         async def refresh_auth_public_key():
             try:
                 setup_info = await rpc_server["easyauth"]["get_setup_info"]()
-                auth_server._public_key = jwk.JWK.from_json(setup_info["public_rsa"])
+                self._public_key = jwk.JWK.from_json(setup_info["public_rsa"])
             except IndexError as e:
-                auth_server.log.error(
-                    f"Unable to refresh_auth_public_key - connection with EasyAuthServer {token_server}:{token_server_port} may have failed"
+                self.log.error(
+                    f"Unable to refresh_auth_public_key - connection with EasyAuthServer {self.token_server}:{self.token_server_port} may have failed"
                 )
 
-        asyncio.create_task(auth_server.scheduler.start())
+        asyncio.create_task(self.scheduler.start())
         await asyncio.sleep(5)
 
-        auth_server.store = await rpc_server["global_store"]["get_store_data"]()
+        self.store = await rpc_server["global_store"]["get_store_data"]()
 
         async def store_data(action: str, store: str, key: str, value: Any = None):
             """
             actions:
                 - put|update|delete
             """
-            auth_server.log.debug(
+            self.log.debug(
                 f"store_data action: {action} - store: {store} - key: {key} - value: {value}"
             )
 
-            if not store in auth_server.store:
-                auth_server.store[store] = {}
+            if not store in self.store:
+                self.store[store] = {}
             if action in {"update", "put"}:
-                print(f"token updated: {key}")
-                auth_server.store[store][key] = value
+                self.log.info(f"token updated: {key}")
+                self.store[store][key] = value
             else:
-                if key in auth_server.store[store]:
-                    del auth_server.store[store][key]
+                if key in self.store[store]:
+                    del self.store[store][key]
 
             return f"{action} in {store} with {key} completed"
 
@@ -239,31 +298,27 @@ class EasyAuthClient:
 
         rpc_server.origin(store_data, namespace="global_store")
 
-        @server.get(
-            f"{default_login_path}",
+        @self.server.get(
+            f"{self.default_login_path}",
             response_class=HTMLResponse,
             include_in_schema=False,
         )
         async def login(request: Request, response: Response):
-            return await auth_server.get_login_page(
-                message="Login to Begin", request=request
-            )
+            return await self.get_login_page(message="Login to Begin", request=request)
 
-        @server.post(
-            f"{default_login_path}/re",
+        @self.server.post(
+            f"{self.default_login_path}/re",
             response_class=HTMLResponse,
             include_in_schema=False,
         )
         async def login(request: Request, response: Response):
             response.delete_cookie("ref")
 
-        @server.on_event("startup")
-        async def setup():
-            auth_server.log.warning(f"adding routers")
-            await auth_server.include_routers()
+        self.log.warning(f"adding routers")
+        await self.include_routers()
 
-        @server.post(
-            f"{default_login_path}",
+        @self.server.post(
+            f"{self.default_login_path}",
             tags=["Login"],
             response_class=HTMLResponse,
             include_in_schema=False,
@@ -275,9 +330,10 @@ class EasyAuthClient:
             password: str = Form(...),
         ):
             token = None
-            token = await auth_server.rpc_server["easyauth"]["generate_auth_token"](
+            token = await self.rpc_server["easyauth"]["generate_auth_token"](
                 username, password
             )
+
             if not "access_token" in token:
                 message = (
                     "invalid username / password"
@@ -285,17 +341,17 @@ class EasyAuthClient:
                     else token
                 )
                 return HTMLResponse(
-                    await auth_server.get_login_page(message=message, request=request),
+                    await self.get_login_page(message=message, request=request),
                     status_code=401,
                 )
             token = token["access_token"]
-            token_id = auth_server.decode_token(token)[1]["token_id"]
-            auth_server.store["tokens"][token_id] = ""
+            token_id = self.decode_token(token)[1]["token_id"]
+            self.store["tokens"][token_id] = ""
 
-            response.set_cookie("token", token, **auth_server.cookie_security)
+            response.set_cookie("token", token, **self.cookie_security)
             response.status_code = 200
 
-            redirect_ref = default_login_redirect
+            redirect_ref = self.default_login_redirect
             if "ref" in request.cookies:
                 redirect_ref = request.cookies["ref"]
                 response.delete_cookie("ref")
@@ -304,9 +360,9 @@ class EasyAuthClient:
                 redirect_ref, headers=response.headers, status_code=HTTP_302_FOUND
             )
 
-        @server.get("/register", response_class=HTMLResponse, tags=["User"])
+        @self.server.get("/register", response_class=HTMLResponse, tags=["User"])
         async def admin_register():
-            return server.html_register_page()
+            return self.server.html_register_page()
 
         @RegisterPage.mark()
         def default_register_page():
@@ -330,13 +386,13 @@ class EasyAuthClient:
                 )
             )
 
-        @server.post("/register", response_class=HTMLResponse, tags=["User"])
+        @self.server.post("/register", response_class=HTMLResponse, tags=["User"])
         async def admin_register_send(user_info: dict):
             return await auth_server.rpc_server["easyauth"]["register_user"](user_info)
 
-        @server.get("/activate", response_class=HTMLResponse, tags=["User"])
+        @self.server.get("/activate", response_class=HTMLResponse, tags=["User"])
         async def admin_activate():
-            return server.html_activation_page()
+            return self.server.html_activation_page()
 
         @ActivationPage.mark()
         def default_activate_page():
@@ -351,13 +407,13 @@ class EasyAuthClient:
                 )
             )
 
-        @server.post("/activate", response_class=HTMLResponse, tags=["User"])
+        @self.server.post("/activate", response_class=HTMLResponse, tags=["User"])
         async def admin_activate_send(activation_code: ActivationCode):
-            return await auth_server.rpc_server["easyauth"]["activate_user"](
+            return await self.rpc_server["easyauth"]["activate_user"](
                 activation_code.dict()
             )
 
-        @server.post("/auth/token/oauth/google", include_in_schema=False)
+        @self.server.post("/auth/token/oauth/google", include_in_schema=False)
         async def create_google_oauth_token(
             request: Request,
             response: Response,
@@ -370,11 +426,11 @@ class EasyAuthClient:
             if google_client_type == "client":
                 body_bytes = await request.body()
                 auth_code = jsonable_encoder(body_bytes)
-            token = await auth_server.rpc_server["easyauth"][
-                "generate_google_oauth_token"
-            ](auth_code)
+            token = await self.rpc_server["easyauth"]["generate_google_oauth_token"](
+                auth_code
+            )
 
-            response.set_cookie("token", token, **auth_server.cookie_security)
+            response.set_cookie("token", token, **self.cookie_security)
 
             redirect_ref = "/"
 
@@ -389,7 +445,7 @@ class EasyAuthClient:
 
             # not redirecting
 
-            decoded_token = auth_server.decode_token(token)[1]
+            decoded_token = self.decode_token(token)[1]
             response_body = {"exp": decoded_token["exp"], "auth": True}
             if include_token:
                 response_body["token"] = token
@@ -399,17 +455,19 @@ class EasyAuthClient:
                 headers=response.headers,
             )
 
-        @server.get(
+        @self.server.get(
             "/logout",
             tags=["Login"],
             response_class=HTMLResponse,
             include_in_schema=False,
         )
         async def logout_page(response: Response):
-            response.set_cookie("token", "INVALID", **auth_server.cookie_security)
-            return RedirectResponse(f"{default_login_path}", headers=response.headers)
+            response.set_cookie("token", "INVALID", **self.cookie_security)
+            return RedirectResponse(
+                f"{self.default_login_path}", headers=response.headers
+            )
 
-        @server.get(
+        @self.server.get(
             "/logout",
             tags=["Login"],
             response_class=HTMLResponse,
@@ -417,9 +475,11 @@ class EasyAuthClient:
         )
         async def logout_page(response: Response):
             response.set_cookie("token", "INVALID")
-            return RedirectResponse(f"{default_login_path}", headers=response.headers)
+            return RedirectResponse(
+                f"{self.default_login_path}", headers=response.headers
+            )
 
-        @server.post(
+        @self.server.post(
             "/logout",
             tags=["Login"],
             response_class=HTMLResponse,
@@ -428,57 +488,10 @@ class EasyAuthClient:
         async def logout_page_post(
             response: Response,
         ):
-            response.set_cookie("token", "INVALID", **auth_server.cookie_security)
+            response.set_cookie("token", "INVALID", **self.cookie_security)
             return RedirectResponse(
-                f"{default_login_path}/re", headers=response.headers
+                f"{self.default_login_path}/re", headers=response.headers
             )
-
-        @server.middleware("http")
-        async def detect_token_in_cookie(request, call_next):
-            request_dict = dict(request)
-            request_header = dict(request.headers)
-            token_in_cookie = None
-            auth_ind = None
-            cookie_ind = None
-            for i, header in enumerate(request_dict["headers"]):
-                if "authorization" in header[0].decode():
-                    if not header[1] is None:
-                        auth_ind = i
-                if "cookie" in header[0].decode():
-                    cookie_ind = i
-                    cookies = header[1].decode().split(",")
-                    for cookie in cookies[0].split("; "):
-                        key, value = cookie.split("=")
-                        if key == "token":
-                            token_in_cookie = value
-            if token_in_cookie and not token_in_cookie == "INVALID":
-                if auth_ind:
-                    request.headers.__dict__["_list"].pop(auth_ind)
-                if request_dict["path"] != f"{default_login_path}":
-                    request.headers.__dict__["_list"].append(
-                        ("authorization".encode(), f"bearer {token_in_cookie}".encode())
-                    )
-                else:
-                    return RedirectResponse("/logout")
-            else:
-                if not request_dict["path"] == f"{default_login_path}":
-                    token_in_cookie = (
-                        "NO_TOKEN" if not token_in_cookie else token_in_cookie
-                    )
-                    request_dict["headers"].append(
-                        ("authorization".encode(), f"bearer {token_in_cookie}".encode())
-                    )
-            response = await call_next(request)
-            if response.status_code == 404 and "text/html" in request.headers["accept"]:
-                if hasattr(auth_server, "html_not_found_page"):
-                    return HTMLResponse(
-                        auth_server.html_not_found_page(), status_code=404
-                    )
-
-                return HTMLResponse(auth_server.admin.not_found_page(), status_code=404)
-            return response
-
-        return auth_server
 
     async def include_routers(self):
         for auth_api_router in self.api_routers:
