@@ -7,3 +7,4 @@ pydbantic[sqlite]
 pre-commit==2.15.0
 asgi-lifespan==2.0.0
 httpx==0.23.3
+pytest-env==0.8.1
