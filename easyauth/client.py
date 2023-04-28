@@ -420,7 +420,6 @@ class EasyAuthClient:
             redirect: bool = True,
             include_token: bool = False,
         ):
-
             google_client_type = request.headers.get("X-Google-OAuth2-Type")
 
             if google_client_type == "client":
@@ -654,13 +653,20 @@ class EasyAuthClient:
                         return response
                 try:
                     token = self.decode_token(token)[1]
+
+                except jwt._JWTError as e:
+                    if str(e) == "expired":
+                        response = HTTPException(
+                            status_code=401, detail="Token has expired"
+                        )
+                        return response
                 except Exception as e:
                     if isinstance(e, InvalidJWSSignature):
                         self.log.error(
-                            f"EasyAuthClient failed to decode token - keys may have rotated - login wil be required"
+                            "EasyAuthClient failed to decode token - keys may have rotated - login wil be required"
                         )
                     else:
-                        self.log.exception(f"error decoding token")
+                        self.log.exception("error decoding token")
                     if (
                         response_class is HTMLResponse
                         or "text/html" in request.headers["accept"]
@@ -680,7 +686,8 @@ class EasyAuthClient:
                         # response.headers["ref"] = request.__dict__["scope"]["path"]
                         return response
                     raise HTTPException(
-                        status_code=401, detail=f"not authorized, invalid or expired"
+                        status_code=401,
+                        detail="not authorized, invalid or expired",
                     )
 
                 allowed = False
@@ -693,7 +700,7 @@ class EasyAuthClient:
                             allowed = True
                             break
 
-                if not token["token_id"] in self.store["tokens"]:
+                if token["token_id"] not in self.store["tokens"]:
                     self.log.error(
                         f"token for user {token['permissions']['users'][0]} - {token['token_id']} is unknown / revoked {self.store['tokens']}"
                     )
@@ -716,7 +723,8 @@ class EasyAuthClient:
                         # response.headers["ref"] = request.__dict__["scope"]["path"]
                         return response
                     raise HTTPException(
-                        status_code=401, detail=f"not authorized, invalid or expired"
+                        status_code=401,
+                        detail="not authorized, invalid or expired",
                     )
 
                 if not allowed:
