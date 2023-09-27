@@ -3,7 +3,7 @@
 # See https://docs.readthedocs.io/en/stable/config-file/v2.html for details
 
 # Required
-version: 1
+version: 2
 
 mkdocs:
   configuration: mkdocs.yml
