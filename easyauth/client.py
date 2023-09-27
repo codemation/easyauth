@@ -3,9 +3,8 @@ import json
 import logging
 import os
 import sys
-import uuid
 from inspect import Parameter, signature
-from typing import Any, List
+from typing import List
 
 import jwcrypto.jwk as jwk
 import python_jwt as jwt
@@ -22,10 +21,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.security import OAuth2PasswordBearer
 from jwcrypto.jws import InvalidJWSSignature
 from makefun import wraps
-from pydbantic import Database, DataBaseModel, Default, PrimaryKey
 from starlette.status import HTTP_302_FOUND
 
-from easyauth.exceptions import EasyAuthClientToServerConnectionError
 from easyauth.models import ActivationCode
 from easyauth.pages import (
     ActivationPage,
@@ -220,6 +217,9 @@ class EasyAuthClient:
 
         return auth_server
 
+    async def is_valid_token(self, token_id: str) -> bool:
+        return await self.rpc_server["easyauth"]["is_valid_token"](token_id)
+
     async def setup(self):
         rpc_server = EasyRpcServer(
             self.server, "/ws/easyauth", server_secret=self.auth_secret, logger=self.log
@@ -227,14 +227,6 @@ class EasyAuthClient:
         self.rpc_server = rpc_server
 
         try:
-            await rpc_server.create_server_proxy(
-                self.token_server,
-                self.token_server_port,
-                "/ws/easyauth",
-                server_secret=self.auth_secret,
-                namespace="global_store",
-            )
-
             await rpc_server.create_server_proxy(
                 self.token_server,
                 self.token_server_port,
@@ -268,35 +260,6 @@ class EasyAuthClient:
                 )
 
         asyncio.create_task(self.scheduler.start())
-        await asyncio.sleep(5)
-
-        self.store = await rpc_server["global_store"]["get_store_data"]()
-
-        async def store_data(action: str, store: str, key: str, value: Any = None):
-            """
-            actions:
-                - put|update|delete
-            """
-            self.log.debug(
-                f"store_data action: {action} - store: {store} - key: {key} - value: {value}"
-            )
-
-            if not store in self.store:
-                self.store[store] = {}
-            if action in {"update", "put"}:
-                self.log.info(f"token updated: {key}")
-                self.store[store][key] = value
-            else:
-                if key in self.store[store]:
-                    del self.store[store][key]
-
-            return f"{action} in {store} with {key} completed"
-
-        store_data.__name__ = store_data.__name__ + "_".join(
-            str(uuid.uuid4()).split("-")
-        )
-
-        rpc_server.origin(store_data, namespace="global_store")
 
         @self.server.get(
             f"{self.default_login_path}",
@@ -346,7 +309,6 @@ class EasyAuthClient:
                 )
             token = token["access_token"]
             token_id = self.decode_token(token)[1]["token_id"]
-            self.store["tokens"][token_id] = ""
 
             response.set_cookie("token", token, **self.cookie_security)
             response.status_code = 200
@@ -651,6 +613,11 @@ class EasyAuthClient:
                             **self.cookie_security,
                         )
                         return response
+                    else:
+                        raise HTTPException(
+                            status_code=401,
+                            detail="not authorized, invalid or expired",
+                        )
                 try:
                     token = self.decode_token(token)[1]
 
@@ -700,9 +667,9 @@ class EasyAuthClient:
                             allowed = True
                             break
 
-                if token["token_id"] not in self.store["tokens"]:
+                if not await self.is_valid_token(token["token_id"]):
                     self.log.error(
-                        f"token for user {token['permissions']['users'][0]} - {token['token_id']} is unknown / revoked {self.store['tokens']}"
+                        f"token for user {token['permissions']['users'][0]} - {token['token_id']} is unknown / revoked"
                     )
                     if (
                         response_class is HTMLResponse
