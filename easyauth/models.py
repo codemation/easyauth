@@ -143,12 +143,8 @@ async def tables_setup(server):
     Create default adminstrator user, admin group and roles if
     no users exist
     """
-    log = server.log
-    db = server.db
 
-    new_user = len(await Users.all()) <= 0
-
-    if new_user and server.leader:
+    if not await Users.count():  # and server.leader:
         random_password = (
             server.generate_random_string(8)
             if not os.environ.get("TEST_INIT_PASSWORD")
@@ -165,12 +161,13 @@ async def tables_setup(server):
         administrators = Groups(group_name="administrators", roles=[admin_role])
         await administrators.save()
 
-        await Users.create(
+        user = Users(
             username="admin",
             password=server.encode_password(random_password),
             account_type="user",
             groups=[administrators],
         )
+        await user.save()
 
         server.log.error(
             f"detected new EasyAuth server, created admin user with password: {random_password}"
@@ -181,9 +178,9 @@ async def tables_setup(server):
 
     easyauth = await OauthConfig.filter(provider="easyauth")
 
-    if not easyauth and server.leader:
-        await OauthConfig.create(
-            provider="easyauth", client_id="EASYAUTH", enabled=True
-        )
+    if not easyauth:  # and server.leader:
+        easyauth = OauthConfig(provider="easyauth", client_id="EASYAUTH", enabled=True)
+        await easyauth.save()
 
-        await OauthConfig.create(provider="google", client_id="", enabled=False)
+        google = OauthConfig(provider="google", client_id="", enabled=False)
+        await google.save()
