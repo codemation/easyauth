@@ -16,7 +16,6 @@ from easyauth.models import (
     Users,
     tables_setup,
 )
-from easyauth.quorum import quorum_setup
 
 
 def get_random_string(length):
@@ -33,7 +32,6 @@ async def database_setup(server):
     DB_PASSWORD
     DB_TYPE [sqlite|mysql|postgres]
     """
-    await quorum_setup(server)
     DB_TYPE = None
 
     assert "DB_TYPE" in os.environ, "missing required DB_TYPE env variable"
