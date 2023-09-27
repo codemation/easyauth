@@ -190,8 +190,6 @@ async def auth_test_server(db_config):
         async with AsyncClient(app=server, base_url="http://test") as test_client:
             yield (test_client, server)
 
-    server.auth.shutdown_auth_server()
-
 
 @pytest.mark.asyncio
 @pytest.fixture()
