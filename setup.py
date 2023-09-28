@@ -10,13 +10,13 @@ BASE_REQUIREMENTS = [
     "python-multipart>=0.0.5",
     "easyadmin==0.170",
     "easyrpc==0.245",
+    "httptools==0.5.0",
 ]
 SERVER_REQUIREMENTS = [
     "pydbantic>=0.0.45",
     "cryptography>=35.0.0",
     "bcrypt>=3.2.0",
     "example==0.1.0",
-    "httptools==0.3.0",
     "gunicorn==20.1.0",
     "fastapi-mail>=0.3.7",
     "email-validator==1.1.3",
